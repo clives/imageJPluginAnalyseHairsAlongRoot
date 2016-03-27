@@ -6,11 +6,23 @@ import org.apache.commons.math3.fitting.PolynomialCurveFitter
 import org.apache.commons.math3.fitting.WeightedObservedPoints
 
 object SearchHairs {
+  import imagej.tools._
   
-  
-  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int )={
+  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean =true )={
     val x_color=searchPixelValueOnPolyLine( img , ourline, delta)
     val specialPixel=getPixelWithColorFarFromPolyLine( x_color)
+   
+    if( debug){
+      val imgcopy=img.copyToNewImg( s"${img.getTitle}_delta_$delta" )
+      val proc=imgcopy.getProcessor
+      proc.setColor( java.awt.Color.WHITE)
+      specialPixel.foreach{
+        pixel_color => proc.drawPixel(pixel_color._1, delta + ourline.value( pixel_color._1).toInt)       
+      }
+      imgcopy.show()
+      imgcopy.updateAndDraw()
+    }
+    
     regroupPixelOverLine( specialPixel)
   }
   

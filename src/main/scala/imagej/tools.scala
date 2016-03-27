@@ -15,6 +15,12 @@ object tools {
       }
    }
    
+   implicit class addFuncToImagePlus( img: ImagePlus){
+     def copyToNewImg(newtitle: String)={
+        new ImagePlus( newtitle, img.getProcessor.createImage())
+     }
+   }
+   
   
    /*
     * img - ImagePlus
@@ -42,4 +48,6 @@ object tools {
    def createBlankImage( title: String, model: ImagePlus)={
      NewImage.createByteImage( title, model.getWidth, model.getHeight, model.getSlice, 0)
    }
+   
+
 }
