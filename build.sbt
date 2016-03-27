@@ -6,7 +6,7 @@ scalaVersion := "2.11.4"
 
 libraryDependencies += "net.imagej" % "ij" % "1.49k"
 libraryDependencies += "org.apache.commons" % "commons-math3" % "3.6"
-
+libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.6" % "test"
 
 
 fork := true

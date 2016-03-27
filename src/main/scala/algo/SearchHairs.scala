@@ -9,7 +9,7 @@ import ij.IJ
 object SearchHairs {
   import imagej.tools._
   
-  def hairsCount( originalimg_high: ImagePlus ):Unit={
+  def hairsCount( originalimg_high: ImagePlus, deltas: Range):List[ (Int,Int)]={
     //switch from 16 to 8 bits.
     val originalimg =  new ImagePlus( "original", originalimg_high.getProcessor.createImage())
     val img=originalimg.copyToNewImg("workingcopy")
@@ -33,7 +33,13 @@ object SearchHairs {
     println(s"coef : ${coef.mkString}");
     val ourfunction = new PolynomialFunction(coef )
     originalimg.updateAndDraw()
-    println(s"We have detected : ${hairsCount( originalimg, ourfunction, 10, true)} haires");
+    
+    val deltaVsHaire= deltas.toList.map{ delta =>
+      val result= hairsCount( originalimg, ourfunction, delta, true)
+      (delta, result)
+    }
+    
+    println(s"We have detected : ${deltaVsHaire} haires");
     
     imgBN.show()
     imgBN.updateAndDraw()
@@ -41,7 +47,7 @@ object SearchHairs {
     originalimg.show();
     originalimg.updateAndDraw()
     
-    
+    deltaVsHaire
   }
   
   
