@@ -16,7 +16,7 @@ object SearchHairs {
    * pixelofinterestovery - Y -> list(pixel)
    */
   def followHair( pixelofinterestovery: Map[ Int, List[ Int]])={
-    val listdelta = pixelofinterestovery.keys.toList //can be generated with by ( 1,3,5,...)
+    val listdelta = pixelofinterestovery.keys.toList.sortBy { x => -x } //can be generated with by ( 1,3,5,...)
     val maxdelta=pixelofinterestovery.keys.max
     
     def regroupforx( currentx : Int, currentdeltas: List[Int] = listdelta, currentresult:Map[Int,List[Int]]=Map.empty ):Map[Int,List[Int]]={ //@return list delta
