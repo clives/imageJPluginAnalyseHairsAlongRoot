@@ -36,10 +36,22 @@ object SearchHairs {
       }
     }
     
+    //regroup by x with maring of 5
+    val starthairatmaxdelta=pixelofinterestovery(maxdelta).foldLeft( List(pixelofinterestovery(maxdelta).head)  ){
+      (A,B) => if( Math.abs( A.head - B ) >= 5) B :: A else A
+    }
+    
+    println("Starting hairs:"+starthairatmaxdelta)
+    
     val startwith= pixelofinterestovery(maxdelta).head
-    val result=regroupforx( startwith)
-    println(s"result: $result")
-    result
+    
+
+    
+    val allhaires=starthairatmaxdelta.flatMap{ startx=>  
+      regroupforx( startx)
+    }  
+    println(s"result: ${allhaires.head}")
+    allhaires
   }
   
   /*
@@ -89,15 +101,15 @@ object SearchHairs {
     val imgfullhair=originalimg.copyToNewImg("fullHair" )
     val procfullhair=imgfullhair.getProcessor
     procfullhair.setColor( WHITE)
-    ourhairs.foreach{ delta_xs =>
+    ourhairs.foreach{    
+      delta_xs =>
         val (delta, ourxs) =delta_xs
         ourxs.foreach{ x=>
           procfullhair.drawPixel(x,delta + ourfunction.value(x).toInt)
           
-        }
-        IJ.save( imgfullhair , DIRECTORY_RESULTIMAGE+ s"fullHair.tif")
+        }        
     }
-    
+    IJ.save( imgfullhair , DIRECTORY_RESULTIMAGE+ s"fullHair.tif")     
     
     println(s"We have detected : ${deltaVsHaire} haires");
     
