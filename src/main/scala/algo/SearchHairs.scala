@@ -9,12 +9,37 @@ import ij.IJ
 object SearchHairs {
   import imagej.tools._
   
+  final val DIRECTORY_RESULTIMAGE="imageresult/"
+  import java.awt.Color._
   
   /*
-   * p
+   * pixelofinterestovery - Y -> list(pixel)
    */
   def followHair( pixelofinterestovery: Map[ Int, List[ Int]])={
+    val listdelta = pixelofinterestovery.keys.toList //can be generated with by ( 1,3,5,...)
+    val maxdelta=pixelofinterestovery.keys.max
     
+    def regroupforx( currentx : Int, currentdeltas: List[Int] = listdelta, currentresult:Map[Int,List[Int]]=Map.empty ):Map[Int,List[Int]]={ //@return list delta
+      if( currentdeltas.isEmpty ) currentresult
+      else{
+        val currentdelta= currentdeltas.head
+        val optallvalidx = pixelofinterestovery.get(currentdelta)
+        val result=optallvalidx.map{ allvalidx=> 
+          allvalidx.filter{ x =>  Math.abs(x-currentx) < 5}
+        }.getOrElse( List.empty[Int] )
+        val newcurrentresult=currentresult + ( currentdelta -> result)
+        
+        if( result.nonEmpty )
+          regroupforx( result.reduce(_+_)/ result.size , currentdeltas.tail, newcurrentresult);
+        else
+          currentresult
+      }
+    }
+    
+    val startwith= pixelofinterestovery(maxdelta).head
+    val result=regroupforx( startwith)
+    println(s"result: $result")
+    result
   }
   
   /*
@@ -58,6 +83,22 @@ object SearchHairs {
       (delta, result)
     }
     
+    // Delta ->  List( X of interest)
+    val mapDeltaX= deltaVsHaire.map{ x=> (x._1,x._2._1)}.toMap
+    val ourhairs=followHair(mapDeltaX)
+    val imgfullhair=originalimg.copyToNewImg("fullHair" )
+    val procfullhair=imgfullhair.getProcessor
+    procfullhair.setColor( WHITE)
+    ourhairs.foreach{ delta_xs =>
+        val (delta, ourxs) =delta_xs
+        ourxs.foreach{ x=>
+          procfullhair.drawPixel(x,delta + ourfunction.value(x).toInt)
+          
+        }
+        IJ.save( imgfullhair , DIRECTORY_RESULTIMAGE+ s"fullHair.tif")
+    }
+    
+    
     println(s"We have detected : ${deltaVsHaire} haires");
     
     imgBN.show()
@@ -66,11 +107,11 @@ object SearchHairs {
     originalimg.show();
     originalimg.updateAndDraw()
     
-    deltaVsHaire
+    deltaVsHaire.map{ x => (x._1, x._2._2)}
   }
   
   
-  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  ):Int={
+  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  ):(List[Int],Int)={
     
     println(s"Coefficient for delta $delta :"+ourline.getCoefficients().mkString(";"));
 
@@ -123,10 +164,15 @@ object SearchHairs {
 //        proc_img_x_color.drawPixel(x_y._1, ourfunctionOverLine.value(x_y._1).toInt) }
       
     
-      IJ.save( img_x_color , s"img_x_color_delta${"%03d".format(delta)}.tif")
-      IJ.save( imgcopy , s"result_delta${"%03d".format(delta)}.tif")
+      IJ.save( img_x_color , DIRECTORY_RESULTIMAGE + s"img_x_color_delta${"%03d".format(delta)}.tif")
+      IJ.save( imgcopy ,     DIRECTORY_RESULTIMAGE+ s"result_delta${"%03d".format(delta)}.tif")
     }
-    regroupPixelOverLine( specialPixel)
+    
+    
+    
+    
+    // specialPixel =>  delta -> X,Color , return only the x
+    ( specialPixel.map(_._1) , regroupPixelOverLine( specialPixel))
   }
   
   
