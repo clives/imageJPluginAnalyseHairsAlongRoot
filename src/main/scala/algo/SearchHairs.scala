@@ -9,7 +9,20 @@ import ij.IJ
 object SearchHairs {
   import imagej.tools._
   
-  def hairsCount( originalimg_high: ImagePlus, deltas: Range):List[ (Int,Int)]={
+  
+  /*
+   * p
+   */
+  def followHair( pixelofinterestovery: Map[ Int, List[ Int]])={
+    
+  }
+  
+  /*
+   * rotation - if true, take linear regression of the blank line, get the angle to convert it to
+   *            angle, then rotate the image to get the line in // with x, permits to have the haires "right"
+   *            (not implemented, only exprience)
+   */
+  def hairsCount( originalimg_high: ImagePlus, deltas: Range, rotation:Boolean = false):List[ (Int,Int)]={
     //switch from 16 to 8 bits.
     val originalimg =  new ImagePlus( "original", originalimg_high.getProcessor.createImage())
     val img=originalimg.copyToNewImg("workingcopy")
@@ -23,11 +36,17 @@ object SearchHairs {
     val ourWhitePixels=for(  x <- 0  until imgBN.getWidth by 1; y <- 0 until imgBN.getHeight; if(imgBN.getPixel(x,y).isWhite)   )yield{
       (x,y)
     }
+    
     val obs = new WeightedObservedPoints();
     ourWhitePixels.foreach{ p =>
       obs.add( p._1.toDouble, p._2.toDouble )
     }
-    println(s"White pixels: ${ourWhitePixels.size}")
+    
+    if( rotation ){
+      val polyfitter= PolynomialCurveFitter.create(2); //Poly 3
+      
+    }
+    
     val polyfitter= PolynomialCurveFitter.create(12); //Poly 3
     val coef=polyfitter.fit(obs.toList());
     println(s"coef : ${coef.mkString}");
@@ -51,7 +70,7 @@ object SearchHairs {
   }
   
   
-  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean =true ):Int={
+  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  ):Int={
     
     println(s"Coefficient for delta $delta :"+ourline.getCoefficients().mkString(";"));
 
@@ -104,10 +123,8 @@ object SearchHairs {
 //        proc_img_x_color.drawPixel(x_y._1, ourfunctionOverLine.value(x_y._1).toInt) }
       
     
-      img_x_color.show()
-      img_x_color.updateAndDraw()
-      
-      IJ.save( imgcopy , "result.tif")
+      IJ.save( img_x_color , s"img_x_color_delta${"%03d".format(delta)}.tif")
+      IJ.save( imgcopy , s"result_delta${"%03d".format(delta)}.tif")
     }
     regroupPixelOverLine( specialPixel)
   }
