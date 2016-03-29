@@ -21,19 +21,51 @@ object SearchHairs {
     val margin =5
     
     
+    type Delta = Int
+    type IDHAIR=Int
+    
     //start from larger delta, get all the hairs then start from the second larger delta ( removing before all the pixels
     //already consumed during the last turn. do it until we have no more delta to consume or the delta is to short ( <0 )
-//    def getallhairs( deltatostartwith: List[Int] ): Map[ ={
-//      if( deltatostartwith.head < 5 ) return
-//    }
+    def getallhairs( deltatostartwith: List[Delta], filtredpixelofinterestovery: Map[ Int, List[ Int]], intersult: List[((Delta,IDHAIR),List[Int])]=List.empty  ): List[((Delta,IDHAIR),List[Int])] ={
+      val delta=deltatostartwith.head
+      
+      if( deltatostartwith.head < 5  || filtredpixelofinterestovery.isEmpty || filtredpixelofinterestovery(delta).isEmpty) return intersult
+      
+      val starthairatmaxdelta=filtredpixelofinterestovery(delta).foldLeft( List((filtredpixelofinterestovery(delta).head, List.empty[Int]))  ){
+      (A,B) => if( Math.abs( A.head._1 - B ) >= 5) (B,List(B)) :: A else ( A.head._1, B:: A.head._2)::A.tail 
+      }
+      
+      val startwith= filtredpixelofinterestovery(delta).head
+      
+      val allhaires=starthairatmaxdelta.zipWithIndex.flatMap{ startx_id=>
+        val (( startx, delta), idhair) = startx_id
+        regroupforx( startx, idhair)
+      }
+      
+      val alldelta=allhaires.map(_._1._1).distinct
+      val map_delta_x= (for( delta <- alldelta)yield{
+        (delta,allhaires.filter( _._1._1 == delta).map( _._2).flatten)
+      }).toMap
+      
+      //remove x already present in map_detla_x for each delta defined
+      val newfiltredpixelofinterestovery=filtredpixelofinterestovery.map{ a => 
+        val (delta, list_x) = a
+        if( map_delta_x.isDefinedAt(delta) ){
+          (delta,list_x.filter { x => ! map_delta_x(delta).contains(x) })
+        }else a
+      }
+      
+      
+      getallhairs( deltatostartwith.tail, newfiltredpixelofinterestovery, intersult  ++ allhaires)
+    }
     
-    type Delta = Int
+    
     
     /*
      * @return map[ delta -> pixel ]
      * should return  List[ Hairid, Map[delta->pixel]] or  Map[  (delta,idhair) -> pixel ]
      */
-    def regroupforx( currentx : Int, idhair:Int, currentdeltas: List[Int] = listdelta, currentresult:Map[(Delta,Int),List[Int]]=Map.empty ):Map[(Delta,Int),List[Int]]={ //@return list delta
+    def regroupforx( currentx : Int, idhair:Int, currentdeltas: List[Delta] = listdelta, currentresult:Map[(Delta,IDHAIR),List[Int]]=Map.empty ):Map[(Delta,IDHAIR),List[Int]]={ //@return list delta
       if( currentdeltas.isEmpty ) currentresult
       else{
         val currentdelta= currentdeltas.head
@@ -77,6 +109,8 @@ object SearchHairs {
     
     println(s"result: ${allhaires.head}")
     allhaires
+    
+    getallhairs( listdelta,pixelofinterestovery);
   }
   
   /*
