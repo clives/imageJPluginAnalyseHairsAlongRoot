@@ -27,7 +27,13 @@ object SearchHairs {
 //      if( deltatostartwith.head < 5 ) return
 //    }
     
-    def regroupforx( currentx : Int, currentdeltas: List[Int] = listdelta, currentresult:Map[Int,List[Int]]=Map.empty ):Map[Int,List[Int]]={ //@return list delta
+    type Delta = Int
+    
+    /*
+     * @return map[ delta -> pixel ]
+     * should return  List[ Hairid, Map[delta->pixel]] or  Map[  (delta,idhair) -> pixel ]
+     */
+    def regroupforx( currentx : Int, idhair:Int, currentdeltas: List[Int] = listdelta, currentresult:Map[(Delta,Int),List[Int]]=Map.empty ):Map[(Delta,Int),List[Int]]={ //@return list delta
       if( currentdeltas.isEmpty ) currentresult
       else{
         val currentdelta= currentdeltas.head
@@ -35,10 +41,13 @@ object SearchHairs {
         val result=optallvalidx.map{ allvalidx=> 
           allvalidx.filter{ x =>  Math.abs(x-currentx) < 5}
         }.getOrElse( List.empty[Int] )
-        val newcurrentresult=currentresult + ( currentdelta -> result)
+        
+        val newcurrentresult=currentresult + ( (currentdelta,idhair) -> result)
+        
+        
         
         if( result.nonEmpty )
-          regroupforx( result.reduce(_+_)/ result.size , currentdeltas.tail, newcurrentresult);
+          regroupforx( result.reduce(_+_)/ result.size , idhair,  currentdeltas.tail, newcurrentresult);
         else
           currentresult
       }
@@ -57,8 +66,9 @@ object SearchHairs {
     
 
     
-    val allhaires=starthairatmaxdelta.flatMap{ startx=>  
-      regroupforx( startx._1)
+    val allhaires=starthairatmaxdelta.zipWithIndex.flatMap{ startx_id=>
+      val (( startx, delta), idhair) = startx_id
+      regroupforx( startx, idhair)
     }  
     
     //remove those haires from data
@@ -116,15 +126,20 @@ object SearchHairs {
     val imgfullhair=originalimg.copyToNewImg("fullHair" )
     val procfullhair=imgfullhair.getProcessor
     procfullhair.setColor( WHITE)
-    ourhairs.foreach{    
-      delta_xs =>
-        val (delta, ourxs) =delta_xs
-        ourxs.foreach{ x=>
-          procfullhair.drawPixel(x,delta + ourfunction.value(x).toInt)
-          
-        }        
+    
+    val allidhairs=ourhairs.map( _._1._2).distinct
+    
+    allidhairs.map{ idhair =>
+      ourhairs.filter{ delta_xs => delta_xs._1._2==idhair } .foreach{    
+        delta_xs =>
+          val ((delta,idhair), ourxs) =delta_xs
+          ourxs.foreach{ x=>
+            procfullhair.drawPixel(x,delta + ourfunction.value(x).toInt)
+            
+          }        
+      }
+      IJ.save( imgfullhair , DIRECTORY_RESULTIMAGE+ s"fullHair_id${idhair}.tif")
     }
-    IJ.save( imgfullhair , DIRECTORY_RESULTIMAGE+ s"fullHair.tif")     
     
     println(s"We have detected : ${deltaVsHaire} haires");
     
