@@ -17,7 +17,15 @@ object SearchHairs {
    */
   def followHair( pixelofinterestovery: Map[ Int, List[ Int]])={
     val listdelta = pixelofinterestovery.keys.toList.sortBy { x => -x } //can be generated with by ( 1,3,5,...)
-    val maxdelta=pixelofinterestovery.keys.max
+    val maxdelta=pixelofinterestovery.keys.toList.sortBy(-_).head
+    val margin =5
+    
+    
+    //start from larger delta, get all the hairs then start from the second larger delta ( removing before all the pixels
+    //already consumed during the last turn. do it until we have no more delta to consume or the delta is to short ( <0 )
+//    def getallhairs( deltatostartwith: List[Int] ): Map[ ={
+//      if( deltatostartwith.head < 5 ) return
+//    }
     
     def regroupforx( currentx : Int, currentdeltas: List[Int] = listdelta, currentresult:Map[Int,List[Int]]=Map.empty ):Map[Int,List[Int]]={ //@return list delta
       if( currentdeltas.isEmpty ) currentresult
@@ -36,9 +44,11 @@ object SearchHairs {
       }
     }
     
-    //regroup by x with maring of 5
-    val starthairatmaxdelta=pixelofinterestovery(maxdelta).foldLeft( List(pixelofinterestovery(maxdelta).head)  ){
-      (A,B) => if( Math.abs( A.head - B ) >= 5) B :: A else A
+    //regroup by x with margin of 5, keep all the values of x regrouped
+    //to improve: the margin should apply not only using the first x but the whole xs matchins x
+    //            would permit to avoid missing evaluation when we have a drop of water in the picture
+    val starthairatmaxdelta=pixelofinterestovery(maxdelta).foldLeft( List((pixelofinterestovery(maxdelta).head, List.empty[Int]))  ){
+      (A,B) => if( Math.abs( A.head._1 - B ) >= 5) (B,List(B)) :: A else ( A.head._1, B:: A.head._2)::A.tail 
     }
     
     println("Starting hairs:"+starthairatmaxdelta)
@@ -48,8 +58,13 @@ object SearchHairs {
 
     
     val allhaires=starthairatmaxdelta.flatMap{ startx=>  
-      regroupforx( startx)
+      regroupforx( startx._1)
     }  
+    
+    //remove those haires from data
+    allhaires
+    
+    
     println(s"result: ${allhaires.head}")
     allhaires
   }
