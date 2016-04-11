@@ -14,6 +14,38 @@ object SearchHairs {
   type Delta = Int
   type IDHAIR=Int
     
+  trait SearchParticularPixel{
+    def getPixelWithColorFarFromPolyLine(pixelOnTheLine: List[(Int,Int)]):List[(Int,Int)] 
+  }
+  
+  
+  /*
+   * input: color 
+   */
+  class SearchParticularPixelUsingPolyRegression extends SearchParticularPixel{
+    
+    def getPixelWithColorFarFromPolyLine(pixelOnTheLine: List[(Int,Int)] )={
+      val polyfitterOverLine= PolynomialCurveFitter.create(8);
+      val obsOverLine = new WeightedObservedPoints();
+      pixelOnTheLine.foreach{ p =>
+        obsOverLine.add( p._1.toDouble, p._2.toDouble )
+      }
+      val ourfunctionOverLine = new PolynomialFunction(polyfitterOverLine.fit(obsOverLine.toList) )
+      
+      val meanVariation=pixelOnTheLine.map{ x=> Math.abs(ourfunctionOverLine.value(x._1)-x._2)  }.reduce(_+_) / pixelOnTheLine.size
+      println(s"meanVariation:$meanVariation")
+      
+      val xOverLineAndOverMean = pixelOnTheLine.filter{
+          position => 
+            position._2 < ourfunctionOverLine.value( position._1) &&
+            (  ourfunctionOverLine.value( position._1)  - position._2  > meanVariation+10)
+                     
+      }
+      xOverLineAndOverMean
+    }
+  }
+  
+  
   /*
    * pixelofinterestovery - Y -> list(pixel)
    */
@@ -129,6 +161,7 @@ object SearchHairs {
     //switch from 16 to 8 bits.
     val originalimg =  new ImagePlus( "original", originalimg_high.getProcessor.createImage())
     val img=originalimg.copyToNewImg("workingcopy")
+    implicit val howto:SearchParticularPixel=new SearchParticularPixelUsingPolyRegression() 
     
     //Search polynomial function of the root
     //1 - maximum 15
@@ -197,7 +230,7 @@ object SearchHairs {
   }
   
   
-  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  ):(List[Int],Int)={
+  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  )(implicit howtosearcgpixel:SearchParticularPixel) :(List[Int],Int)={
     
     println(s"Coefficient for delta $delta :"+ourline.getCoefficients().mkString(";"));
 
@@ -311,21 +344,21 @@ object SearchHairs {
    * then we calculate the mean difference => we use this mean difference to detect pixel under this line with
    * larger difference than the mean.
    */
-  private def getPixelWithColorFarFromPolyLine(pixelOverTheLine: List[(Int,Int)] )={
+  private def getPixelWithColorFarFromPolyLine(pixelOnTheLine: List[(Int,Int)] )={
     val polyfitterOverLine= PolynomialCurveFitter.create(8);
     val obsOverLine = new WeightedObservedPoints();
-    pixelOverTheLine.foreach{ p =>
+    pixelOnTheLine.foreach{ p =>
       obsOverLine.add( p._1.toDouble, p._2.toDouble )
     }
     val ourfunctionOverLine = new PolynomialFunction(polyfitterOverLine.fit(obsOverLine.toList) )
     
-    val meanVariation=pixelOverTheLine.map{ x=> Math.abs(ourfunctionOverLine.value(x._1)-x._2)  }.reduce(_+_) / pixelOverTheLine.size
+    val meanVariation=pixelOnTheLine.map{ x=> Math.abs(ourfunctionOverLine.value(x._1)-x._2)  }.reduce(_+_) / pixelOnTheLine.size
     println(s"meanVariation:$meanVariation")
     
-    val xOverLineAndOverMean = pixelOverTheLine.filter{
+    val xOverLineAndOverMean = pixelOnTheLine.filter{
         position => 
           position._2 < ourfunctionOverLine.value( position._1) &&
-          (  ourfunctionOverLine.value( position._1)  - position._2  > meanVariation+6)
+          (  ourfunctionOverLine.value( position._1)  - position._2  > meanVariation+10)
                    
     }
     xOverLineAndOverMean
