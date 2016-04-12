@@ -6,21 +6,46 @@ import org.apache.commons.math3.fitting.PolynomialCurveFitter
 import org.apache.commons.math3.fitting.WeightedObservedPoints
 import ij.IJ
 
-object SearchHairs {
-  import imagej.tools._
-  
-  final val DIRECTORY_RESULTIMAGE="imageresult/"
-  import java.awt.Color._
-  type Delta = Int
-  type IDHAIR=Int
-    
+
   trait SearchParticularPixel{
     def getPixelWithColorFarFromPolyLine(pixelOnTheLine: List[(Int,Int)]):List[(Int,Int)] 
   }
   
   
   /*
-   * input: color 
+   * search "particular" pixel using simple moving average
+   * goes from one side of the image to the other than reverse the
+   * exploration ( SMA(10) => the first 10 data are empty, this is why we 
+   * move in both direction
+   */
+  class SearchParticularPixelUsingSMA(period: Int) extends SearchParticularPixel{
+    
+    private def sma( data:List[Int], result: List[Int]=List.empty ):List[Int]={
+      if( data.isEmpty || data.size < period ) result
+      else{
+        val currentresult=data.take(period).reduce(_+_)/period
+        sma( data.tail, result :+ currentresult )
+      }
+    }
+    
+    /*
+     * return pixel > stdDeviation over the colorvalue
+     */
+    def getPixelWithColorFarFromPolyLine( pixelOnTheLine: List[(Int,Int)] ) ={
+      val onlycolors= pixelOnTheLine.map(_._2)
+      val smacolor= sma( onlycolors)
+      
+      val xAndDiffSMA=pixelOnTheLine.drop(period).zip(smacolor).map{ A => (A._1, A._1._2 - A._2) }
+      
+      val medianDiffSMA=xAndDiffSMA.map(_._2).sum / xAndDiffSMA.size
+      val stdDeviation=Math.sqrt( xAndDiffSMA.map( _._2).map{ x => Math.pow(x-medianDiffSMA,2) }.sum / xAndDiffSMA.size)      
+      xAndDiffSMA.filter{ x => Math.abs(x._2) > stdDeviation}.map(_._1)
+    }
+  }
+
+  /*
+   * search "particular" pixel using a polynomial regression
+   * does not work very well on a large image
    */
   class SearchParticularPixelUsingPolyRegression extends SearchParticularPixel{
     
@@ -44,6 +69,17 @@ object SearchHairs {
       xOverLineAndOverMean
     }
   }
+  
+object SearchHairs {
+  import imagej.tools._
+  
+  final val DIRECTORY_RESULTIMAGE="imageresult/"
+  import java.awt.Color._
+  type Delta = Int
+  type IDHAIR=Int
+  type ColorValue=Int
+    
+
   
   
   /*
@@ -142,13 +178,7 @@ object SearchHairs {
       regroupforx( startx, idhair)
     }  
     
-    //remove those haires from data
-    allhaires
-    
-    
     println(s"result: ${allhaires.head}")
-    allhaires
-    
     getallhairs(0, listdelta,pixelofinterestovery);
   }
   
@@ -235,7 +265,7 @@ object SearchHairs {
     println(s"Coefficient for delta $delta :"+ourline.getCoefficients().mkString(";"));
 
     val x_color=searchPixelValueOnPolyLine( img , ourline, delta)
-    val specialPixel=getPixelWithColorFarFromPolyLine( x_color)
+    val specialPixel=howtosearcgpixel.getPixelWithColorFarFromPolyLine( x_color)
    
     if( debug){
       val imgcopy=img.copyToNewImg( s"${img.getTitle}_delta_$delta" )
@@ -336,35 +366,5 @@ object SearchHairs {
     }
     pixelValueOverTheLine.toList
   }
-  
-  
-  /*
-   * Get all the pixels who seem to be "outside" the function
-   * pixelOverTheLine => (x, color) , we create a polynomial line who match those (x,color)
-   * then we calculate the mean difference => we use this mean difference to detect pixel under this line with
-   * larger difference than the mean.
-   */
-  private def getPixelWithColorFarFromPolyLine(pixelOnTheLine: List[(Int,Int)] )={
-    val polyfitterOverLine= PolynomialCurveFitter.create(8);
-    val obsOverLine = new WeightedObservedPoints();
-    pixelOnTheLine.foreach{ p =>
-      obsOverLine.add( p._1.toDouble, p._2.toDouble )
-    }
-    val ourfunctionOverLine = new PolynomialFunction(polyfitterOverLine.fit(obsOverLine.toList) )
-    
-    val meanVariation=pixelOnTheLine.map{ x=> Math.abs(ourfunctionOverLine.value(x._1)-x._2)  }.reduce(_+_) / pixelOnTheLine.size
-    println(s"meanVariation:$meanVariation")
-    
-    val xOverLineAndOverMean = pixelOnTheLine.filter{
-        position => 
-          position._2 < ourfunctionOverLine.value( position._1) &&
-          (  ourfunctionOverLine.value( position._1)  - position._2  > meanVariation+10)
-                   
-    }
-    xOverLineAndOverMean
-  }
-  
-  
-  
-  
+
 }
