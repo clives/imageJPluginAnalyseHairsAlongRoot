@@ -78,14 +78,14 @@ object SearchHairs {
   type Delta = Int
   type IDHAIR=Int
   type ColorValue=Int
-    
+  case class LineColor( x: Int, c: ColorValue)  
 
   
   
   /*
    * pixelofinterestovery - Y -> list(pixel)
    */
-  def followHair( pixelofinterestovery: Map[ Delta, List[ Int]])={
+  def followHair( pixelofinterestovery: Map[ Delta, List[ ColorValue]])={
     val listdelta = pixelofinterestovery.keys.toList.sortBy { x => -x } //can be generated with by ( 1,3,5,...)
     val maxdelta=pixelofinterestovery.keys.toList.sortBy(-_).head
     val margin =5
@@ -137,7 +137,7 @@ object SearchHairs {
     
     
     /*
-     * @return map[ delta -> pixel ]
+     * @return map[ delta -> pixel(x) ]
      * should return  List[ Hairid, Map[delta->pixel]] or  Map[  (delta,idhair) -> pixel ]
      */
     def regroupforx( currentx : Int, idhair:Int, currentdeltas: List[Delta] = listdelta, currentresult:Map[(Delta,IDHAIR),List[Int]]=Map.empty ):Map[(Delta,IDHAIR),List[Int]]={ //@return list delta
@@ -183,9 +183,11 @@ object SearchHairs {
   }
   
   /*
-   * rotation - if true, take linear regression of the blank line, get the angle to convert it to
-   *            angle, then rotate the image to get the line in // with x, permits to have the haires "right"
-   *            (not implemented, only exprience)
+   * @param rotation - if true, take linear regression of the blank line, get the angle to convert it to
+   *                   angle, then rotate the image to get the line in // with x, permits to have the haires "right"
+   *                   ( not implemented, only exprience)
+   *            
+   * @return    List[ Delta / nbrHairs]  - nbr of hairs for each delta defined in the range "deltas"
    */
   def hairsCount( originalimg_high: ImagePlus, deltas: Range, rotation:Boolean = false):List[ (Int,Int)]={
     //switch from 16 to 8 bits.
@@ -248,7 +250,7 @@ object SearchHairs {
       IJ.save( onehair , DIRECTORY_RESULTIMAGE+ s"oneHair_id${idhair}.tif")
     }
     
-    println(s"We have detected : ${deltaVsHaire} haires");
+    println(s"We have detected : ${deltaVsHaire.map{ delta_nbr => s"delta: ${delta_nbr._1} => nbrHairs: ${delta_nbr._2._2} "  }.mkString(",")}");
     
     imgBN.show()
     imgBN.updateAndDraw()
@@ -327,28 +329,33 @@ object SearchHairs {
     
     
     // specialPixel =>  delta -> X,Color , return only the x
-    ( specialPixel.map(_._1) , regroupPixelOverLine( specialPixel))
+    ( specialPixel.map(_._1) , regroupPixelOverLine( specialPixel.map{ x=> LineColor(x._1, x._2)}))
   }
   
   
-  private def regroupPixelOverLine( overlinepixel: List[(Int,Int)], count :Int=0):Int ={
+  /*
+   * count number of different hair along a simple line.
+   * If we to pixel side by side, or with a distance less then MAXIMUM_DISTANCE
+   * we are on the same hair => we do not increase the counter
+   * 
+   * @return the number of different group of pixel, would correspond as the number of hairs.
+   */
+  private def regroupPixelOverLine( overlinepixel: List[LineColor], count :Int=0):Int ={
+      val MAXIMUM_DISTANCE = 4
+    
       overlinepixel match{
         case x::Nil => 
-          println("Last x:"+x)
           count
         case Nil =>   count
-        case x::xs =>
+        case head::xs =>
           
-          val updatecount=if( xs.head._1 - x._1 < 4 ){   
+          val updatecount=if( xs.head.x - head.x < MAXIMUM_DISTANCE ){   
              if( count ==0 ) 1 //count change, we have to add the first one.
              else count
             }else{
-              println("Raise over:"+x._1)
               count+1;
             }
-          
-          regroupPixelOverLine( xs, updatecount)
-        
+          regroupPixelOverLine( xs, updatecount)      
       }
     }
   
