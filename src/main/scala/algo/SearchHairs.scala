@@ -7,68 +7,7 @@ import org.apache.commons.math3.fitting.WeightedObservedPoints
 import ij.IJ
 
 
-  trait SearchParticularPixel{
-    def getPixelWithColorFarFromPolyLine(pixelOnTheLine: List[(Int,Int)]):List[(Int,Int)] 
-  }
-  
-  
-  /*
-   * search "particular" pixel using simple moving average
-   * goes from one side of the image to the other than reverse the
-   * exploration ( SMA(10) => the first 10 data are empty, this is why we 
-   * move in both direction
-   */
-  class SearchParticularPixelUsingSMA(period: Int) extends SearchParticularPixel{
-    
-    private def sma( data:List[Int], result: List[Int]=List.empty ):List[Int]={
-      if( data.isEmpty || data.size < period ) result
-      else{
-        val currentresult=data.take(period).reduce(_+_)/period
-        sma( data.tail, result :+ currentresult )
-      }
-    }
-    
-    /*
-     * return pixel > stdDeviation over the colorvalue
-     */
-    def getPixelWithColorFarFromPolyLine( pixelOnTheLine: List[(Int,Int)] ) ={
-      val onlycolors= pixelOnTheLine.map(_._2)
-      val smacolor= sma( onlycolors)
-      
-      val xAndDiffSMA=pixelOnTheLine.drop(period).zip(smacolor).map{ A => (A._1, A._1._2 - A._2) }
-      
-      val medianDiffSMA=xAndDiffSMA.map(_._2).sum / xAndDiffSMA.size
-      val stdDeviation=Math.sqrt( xAndDiffSMA.map( _._2).map{ x => Math.pow(x-medianDiffSMA,2) }.sum / xAndDiffSMA.size)      
-      xAndDiffSMA.filter{ x => Math.abs(x._2) > stdDeviation}.map(_._1)
-    }
-  }
 
-  /*
-   * search "particular" pixel using a polynomial regression
-   * does not work very well on a large image
-   */
-  class SearchParticularPixelUsingPolyRegression extends SearchParticularPixel{
-    
-    def getPixelWithColorFarFromPolyLine(pixelOnTheLine: List[(Int,Int)] )={
-      val polyfitterOverLine= PolynomialCurveFitter.create(8);
-      val obsOverLine = new WeightedObservedPoints();
-      pixelOnTheLine.foreach{ p =>
-        obsOverLine.add( p._1.toDouble, p._2.toDouble )
-      }
-      val ourfunctionOverLine = new PolynomialFunction(polyfitterOverLine.fit(obsOverLine.toList) )
-      
-      val meanVariation=pixelOnTheLine.map{ x=> Math.abs(ourfunctionOverLine.value(x._1)-x._2)  }.reduce(_+_) / pixelOnTheLine.size
-      println(s"meanVariation:$meanVariation")
-      
-      val xOverLineAndOverMean = pixelOnTheLine.filter{
-          position => 
-            position._2 < ourfunctionOverLine.value( position._1) &&
-            (  ourfunctionOverLine.value( position._1)  - position._2  > meanVariation+10)
-                     
-      }
-      xOverLineAndOverMean
-    }
-  }
   
 object SearchHairs {
   import imagej.tools._
@@ -79,6 +18,7 @@ object SearchHairs {
   type IDHAIR=Int
   type ColorValue=Int
   case class LineColor( x: Int, c: ColorValue)  
+  case class Pixel( x:Int, y:Int)
 
   
   
@@ -187,7 +127,7 @@ object SearchHairs {
    *                   angle, then rotate the image to get the line in // with x, permits to have the haires "right"
    *                   ( not implemented, only exprience)
    *            
-   * @return    List[ Delta / nbrHairs]  - nbr of hairs for each delta defined in the range "deltas"
+   * @return    List[ (Delta,nbrHairs)]  - nbr of hairs for each delta defined in the range "deltas"
    */
   def hairsCount( originalimg_high: ImagePlus, deltas: Range, rotation:Boolean = false):List[ (Int,Int)]={
     //switch from 16 to 8 bits.
@@ -262,6 +202,12 @@ object SearchHairs {
   }
   
   
+  /*
+   * count the number of hairs for a specific delta and give the list of pixel who are suppose to
+   * be parts of a hair.
+   * 
+   * @return ( list pixels along the line at delta who belongs to hairs, nbr of hairs)
+   */
   def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  )(implicit howtosearcgpixel:SearchParticularPixel) :(List[Int],Int)={
     
     println(s"Coefficient for delta $delta :"+ourline.getCoefficients().mkString(";"));
@@ -277,11 +223,11 @@ object SearchHairs {
       //can swith to x_color to see the whole line specialPixel
       proc.setColor( java.awt.Color.BLACK)
       x_color.foreach{
-        pixel_color => proc.drawPixel(pixel_color._1, delta + ourline.value( pixel_color._1).toInt)       
+        pixel_color => proc.drawPixel(pixel_color.x, delta + ourline.value( pixel_color.x).toInt)       
       }
       proc.setColor( java.awt.Color.WHITE)
       specialPixel.foreach{
-        pixel_color => proc.drawPixel(pixel_color._1, delta + ourline.value( pixel_color._1).toInt)       
+        pixel_color => proc.drawPixel(pixel_color.x, delta + ourline.value( pixel_color.x).toInt)       
       }
       imgcopy.show()
       imgcopy.updateAndDraw()
@@ -292,34 +238,25 @@ object SearchHairs {
       
       //draw the special pixels detected as out of function
       specialPixel.foreach{
-        pixel_color => proc_img_x_color.drawPixel(pixel_color._1, img_x_color.getHeight - 20)       
+        pixel_color => proc_img_x_color.drawPixel(pixel_color.x, img_x_color.getHeight - 20)       
       }
       
       proc_img_x_color.setColor(java.awt.Color.BLACK)
       x_color.foreach{ x_y => 
-        println(s"draw pixel ${x_y._1} , ${x_y._2}")
-        proc_img_x_color.drawPixel(x_y._1, x_y._2) }
+        println(s"draw pixel ${x_y.x} , ${x_y.c}")
+        proc_img_x_color.drawPixel(x_y.x, x_y.c) }
       
       //test better way to check outside pixel
       val analyse=x_color.tail.zip(x_color).map{
         case (last,current) =>
-          if( Math.abs(last._2 - current._2 ) < 10 ) (current._1,current._2) 
-          else (current._1,400)
+          if( Math.abs(last.c - current.c ) < 10 ) (current.x,current.c) 
+          else (current.x,400)
       }
       
       analyse.foreach{ x_y => 
         println(s"draw pixel ${x_y._1} , ${x_y._2}")
         proc_img_x_color.drawPixel(x_y._1, x_y._2) }
-//      
-//      val polyfitterOverLine= PolynomialCurveFitter.create(48);
-//      val obsOverLine = new WeightedObservedPoints();
-//      x_color.foreach{ p =>
-//        obsOverLine.add( p._1.toDouble, p._2.toDouble )
-//      }
-//      val ourfunctionOverLine = new PolynomialFunction(polyfitterOverLine.fit(obsOverLine.toList) )
-//      x_color.foreach{ x_y => 
-//        proc_img_x_color.drawPixel(x_y._1, ourfunctionOverLine.value(x_y._1).toInt) }
-      
+
     
       IJ.save( img_x_color , DIRECTORY_RESULTIMAGE + s"img_x_color_delta${"%03d".format(delta)}.tif")
       IJ.save( imgcopy ,     DIRECTORY_RESULTIMAGE+ s"result_delta${"%03d".format(delta)}.tif")
@@ -329,7 +266,7 @@ object SearchHairs {
     
     
     // specialPixel =>  delta -> X,Color , return only the x
-    ( specialPixel.map(_._1) , regroupPixelOverLine( specialPixel.map{ x=> LineColor(x._1, x._2)}))
+    ( specialPixel.map(_.x) , regroupPixelOverLine( specialPixel.map{ x=> LineColor(x.x, x.c)}))
   }
   
   
@@ -371,7 +308,7 @@ object SearchHairs {
       val valueatx=proc.getPixel(  x , ourline.value(x).toInt + delta  )   
       (x,valueatx)
     }
-    pixelValueOverTheLine.toList
+    pixelValueOverTheLine.toList.map{ x => LineColor(x._1,x._2)} 
   }
 
 }
