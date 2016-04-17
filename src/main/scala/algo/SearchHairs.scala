@@ -208,12 +208,12 @@ object SearchHairs {
    * 
    * @return ( list pixels along the line at delta who belongs to hairs, nbr of hairs)
    */
-  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  )(implicit howtosearcgpixel:SearchParticularPixel) :(List[Int],Int)={
+  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  )(implicit searchOutsiderPixel:SearchParticularPixel) :(List[Int],Int)={
     
     println(s"Coefficient for delta $delta :"+ourline.getCoefficients().mkString(";"));
 
     val x_color=searchPixelValueOnPolyLine( img , ourline, delta)
-    val specialPixel=howtosearcgpixel.getPixelWithColorFarFromPolyLine( x_color)
+    val specialPixel=searchOutsiderPixel.getPixelWithColorFarFromPolyLine( x_color)
    
     if( debug){
       val imgcopy=img.copyToNewImg( s"${img.getTitle}_delta_$delta" )
@@ -261,12 +261,9 @@ object SearchHairs {
       IJ.save( img_x_color , DIRECTORY_RESULTIMAGE + s"img_x_color_delta${"%03d".format(delta)}.tif")
       IJ.save( imgcopy ,     DIRECTORY_RESULTIMAGE+ s"result_delta${"%03d".format(delta)}.tif")
     }
-    
-    
-    
-    
+
     // specialPixel =>  delta -> X,Color , return only the x
-    ( specialPixel.map(_.x) , regroupPixelOverLine( specialPixel.map{ x=> LineColor(x.x, x.c)}))
+    ( specialPixel.map(_.x) , countHairsOverLine( specialPixel.map{ x=> LineColor(x.x, x.c)}))
   }
   
   
@@ -277,13 +274,12 @@ object SearchHairs {
    * 
    * @return the number of different group of pixel, would correspond as the number of hairs.
    */
-  private def regroupPixelOverLine( overlinepixel: List[LineColor], count :Int=0):Int ={
+  private def countHairsOverLine( overlinepixel: List[LineColor], count :Int=0):Int ={
       val MAXIMUM_DISTANCE = 4
     
       overlinepixel match{
-        case x::Nil => 
-          count
-        case Nil =>   count
+        case x::Nil => count
+        case Nil =>  count
         case head::xs =>
           
           val updatecount=if( xs.head.x - head.x < MAXIMUM_DISTANCE ){   
@@ -292,9 +288,9 @@ object SearchHairs {
             }else{
               count+1;
             }
-          regroupPixelOverLine( xs, updatecount)      
+          countHairsOverLine( xs, updatecount)      
       }
-    }
+  }
   
   /*
    * Search over a polynomial line the color of the pixel ( x, color)
