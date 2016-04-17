@@ -6,7 +6,12 @@ import org.apache.commons.math3.fitting.WeightedObservedPoints
 
 import SearchHairs._
   trait SearchParticularPixel{
-    def getPixelWithColorFarFromPolyLine(pixelOnTheLine: List[LineColor]):List[LineColor] 
+  
+    /*
+     * line : line as (x, color), x: 0 to image with
+     * @return outside pixel as x:[a to b]( x, color), x:[c,d](x, color), x:[e,f](x, color),.......
+     */
+    def getOutsiderPixelAlongTheLine(line: List[LineColor]): List[LineColor] 
   }
   
   
@@ -29,7 +34,7 @@ import SearchHairs._
     /*
      * return pixel > stdDeviation over the colorvalue
      */
-    def getPixelWithColorFarFromPolyLine( pixelOnTheLine: List[LineColor] ) ={
+    def getOutsiderPixelAlongTheLine( pixelOnTheLine: List[LineColor] ) = {
       val onlycolors= pixelOnTheLine.map(_.c)
       val smacolor= sma( onlycolors)
       
@@ -47,7 +52,7 @@ import SearchHairs._
    */
   class SearchParticularPixelUsingPolyRegression extends SearchParticularPixel{
     
-    def getPixelWithColorFarFromPolyLine(pixelOnTheLine: List[LineColor] )={
+    def getOutsiderPixelAlongTheLine(pixelOnTheLine: List[LineColor] ) = {
       val polyfitterOverLine= PolynomialCurveFitter.create(8);
       val obsOverLine = new WeightedObservedPoints();
       pixelOnTheLine.foreach{ p =>

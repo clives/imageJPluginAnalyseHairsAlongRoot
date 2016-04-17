@@ -213,7 +213,7 @@ object SearchHairs {
     println(s"Coefficient for delta $delta :"+ourline.getCoefficients().mkString(";"));
 
     val x_color=searchPixelValueOnPolyLine( img , ourline, delta)
-    val specialPixel=searchOutsiderPixel.getPixelWithColorFarFromPolyLine( x_color)
+    val specialPixel=searchOutsiderPixel.getOutsiderPixelAlongTheLine( x_color)
    
     if( debug){
       val imgcopy=img.copyToNewImg( s"${img.getTitle}_delta_$delta" )
