@@ -108,8 +108,8 @@ import SearchHairs._
   class SearchParticularPixelUsingSMA(period: Int) extends SearchOutsiderPixels{
     
     def name=s"SMA($period)"
-    var aproximateLine: List[LineColor]=List.empty
     
+    var aproximateLine: List[LineColor]=List.empty
     def getAproximateLine(): List[LineColor]=aproximateLine
     
     private def sma( data:List[Int], result: List[Int]=List.empty ):List[Int]={
@@ -147,14 +147,27 @@ import SearchHairs._
   class SearchOutsidersPixelUsingMultiplePolyRegression( size:Int, polyLevel:Int) extends SearchOutsiderPixels {
     def name=s"MultiPolyReg($size,$polyLevel)"
     
-    def getAproximateLine(): List[LineColor]=List.empty
+    var aproximateLine: List[LineColor]=List.empty
+    def getAproximateLine(): List[LineColor]=aproximateLine
     
-    
-    def consumeline( currentpixels: List[LineColor] , size: Int, result:List[LineColor] =List.empty ): List[LineColor]={
-      if( currentpixels.isEmpty ) result
+    /*
+     * consume all the line, consuming at each step a dimension of at maximum blocksize
+     * 
+     * 
+     * @param approximateLine  - the line generated using the poly regression. only for debug
+     */
+    def consumeline( currentpixels: List[LineColor] , blocksize: Int, result:List[LineColor] =List.empty, approximateLine: List[LineColor]=List.empty ): (List[LineColor],List[LineColor])={
+      if( currentpixels.isEmpty ) (result, approximateLine)
       else{
-        val ourpixels=currentpixels.take(size)
-        val nextpixels=currentpixels.drop(size)
+        
+        
+        //better double blocksize at the end of the line using a almost empty line
+        val (ourpixels, nextpixels) = if( currentpixels.size < 2*blocksize){
+          (currentpixels, List.empty[LineColor])
+        }else{
+          (currentpixels.take(blocksize),currentpixels.drop(blocksize )) 
+        }
+        
         
         val polyfitterOverLine= PolynomialCurveFitter.create(polyLevel);
         val obsOverLine = new WeightedObservedPoints();
@@ -166,14 +179,16 @@ import SearchHairs._
         val meanVariation=ourpixels.map{ x=> Math.abs(ourfunctionOverLine.value(x.x)-x.c)  }.reduce(_+_) / ourpixels.size
         println(s"meanVariation:$meanVariation")
         
-        val xOverLineAndOverMean = currentpixels.filter{
+        val xOverLineAndOverMean = ourpixels.filter{
             position => 
               position.c < ourfunctionOverLine.value( position.x) &&
               (  ourfunctionOverLine.value( position.x)  - position.c  > meanVariation+10)
                        
         }
         
-        consumeline( nextpixels, size, result ++ xOverLineAndOverMean)
+        val newapproximateline=approximateLine ++ ourpixels.map{ linecolor => LineColor( linecolor.x, ourfunctionOverLine.value(linecolor.x).toInt)}
+        
+        consumeline( nextpixels, blocksize, result ++ xOverLineAndOverMean, newapproximateline)
       }
     }
     
@@ -181,7 +196,9 @@ import SearchHairs._
       
       val linesize = pixelOnTheLine.size / Math.floor( pixelOnTheLine.size / size) 
       println(s"linesize:$linesize")
-      consumeline( pixelOnTheLine, linesize.toInt )      
+      val (response, debug)=consumeline( pixelOnTheLine, linesize.toInt )  
+      aproximateLine=debug;
+      response
     }
   }
   

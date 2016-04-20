@@ -46,7 +46,7 @@ object tools {
    
    
    def createBlankImage( title: String, model: ImagePlus)={
-     NewImage.createByteImage( title, model.getWidth, model.getHeight, model.getSlice, 0)
+     NewImage.createRGBImage( title, model.getWidth, model.getHeight, model.getSlice, 0)
    }
    
 

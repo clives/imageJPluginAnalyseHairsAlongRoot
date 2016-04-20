@@ -5,7 +5,7 @@ import ij.ImagePlus
 import org.apache.commons.math3.fitting.PolynomialCurveFitter
 import org.apache.commons.math3.fitting.WeightedObservedPoints
 import ij.IJ
-
+import java.io._
 
 
   
@@ -20,7 +20,12 @@ object SearchHairs {
   case class LineColor( x: Int, c: ColorValue)  
   case class Pixel( x:Int, y:Int)
 
-  
+  private def cleanResultDirectory()={
+    for {
+      files <- Option(new File(DIRECTORY_RESULTIMAGE).listFiles)
+      file <- files if file.getName.endsWith(".tif")
+    } file.delete
+  }
   
   /*
    * pixelofinterestovery - Y -> list(pixel)
@@ -129,11 +134,12 @@ object SearchHairs {
    *            
    * @return    List[ (Delta,nbrHairs)]  - nbr of hairs for each delta defined in the range "deltas"
    */
-  def hairsCount( originalimg_high: ImagePlus, deltas: Range, rotation:Boolean = false):List[ (Int,Int)]={
+  def hairsCount( originalimg_high: ImagePlus, deltas: Range, rotation:Boolean = false)(implicit howto:SearchOutsiderPixels=new SearchParticularPixelUsingPolyRegression() ):List[ (Int,Int)]={
     //switch from 16 to 8 bits.
     val originalimg =  new ImagePlus( "original", originalimg_high.getProcessor.createImage())
     val img=originalimg.copyToNewImg("workingcopy")
-    implicit val howto:SearchParticularPixel=new SearchParticularPixelUsingPolyRegression() 
+    
+    cleanResultDirectory()
     
     //Search polynomial function of the root
     //1 - maximum 15
@@ -208,13 +214,14 @@ object SearchHairs {
    * 
    * @return ( list pixels along the line at delta who belongs to hairs, nbr of hairs)
    */
-  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  )(implicit searchOutsiderPixel:SearchParticularPixel) :(List[Int],Int)={
+  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  )(implicit searchOutsiderPixel:SearchOutsiderPixels) :(List[Int],Int)={
     
     println(s"Coefficient for delta $delta :"+ourline.getCoefficients().mkString(";"));
 
     val x_color=searchPixelValueOnPolyLine( img , ourline, delta)
     val specialPixel=searchOutsiderPixel.getOutsiderPixelAlongTheLine( x_color)
-   
+    val nbrOfHairs= countHairsOverLine( specialPixel.map{ x=> LineColor(x.x, x.c)})
+    
     if( debug){
       val imgcopy=img.copyToNewImg( s"${img.getTitle}_delta_$delta" )
       val proc=imgcopy.getProcessor
@@ -237,14 +244,19 @@ object SearchHairs {
       val proc_img_x_color= img_x_color.getProcessor
       
       //draw the special pixels detected as out of function
+      proc_img_x_color.setColor(java.awt.Color.BLUE)
       specialPixel.foreach{
         pixel_color => proc_img_x_color.drawPixel(pixel_color.x, img_x_color.getHeight - 20)       
       }
       
-      proc_img_x_color.setColor(java.awt.Color.BLACK)
-      x_color.foreach{ x_y => 
-        println(s"draw pixel ${x_y.x} , ${x_y.c}")
-        proc_img_x_color.drawPixel(x_y.x, x_y.c) }
+      
+   //   x_color.foreach{ x_y => 
+    //    proc_img_x_color.drawPixel(x_y.x, x_y.c) }
+      
+      proc_img_x_color.setColor(java.awt.Color.RED)
+      //draw the appoximate line
+      searchOutsiderPixel.getAproximateLine().foreach{ x_y => 
+        proc_img_x_color.drawPixel(x_y.x, x_y.c + 0) }
       
       //test better way to check outside pixel
       val analyse=x_color.tail.zip(x_color).map{
@@ -253,17 +265,19 @@ object SearchHairs {
           else (current.x,400)
       }
       
+      //Draw the line (x,color)
+      proc_img_x_color.setColor(java.awt.Color.BLACK)
       analyse.foreach{ x_y => 
-        println(s"draw pixel ${x_y._1} , ${x_y._2}")
         proc_img_x_color.drawPixel(x_y._1, x_y._2) }
 
     
-      IJ.save( img_x_color , DIRECTORY_RESULTIMAGE + s"img_x_color_delta${"%03d".format(delta)}.tif")
-      IJ.save( imgcopy ,     DIRECTORY_RESULTIMAGE+ s"result_delta${"%03d".format(delta)}.tif")
+      IJ.save( img_x_color , DIRECTORY_RESULTIMAGE + s"img_x_color_delta${"%03d".format(delta)}_nbr${nbrOfHairs}_algo:${searchOutsiderPixel.name}.tif")
+      IJ.save( imgcopy ,     DIRECTORY_RESULTIMAGE+ s"img_x_color_delta${"%03d".format(delta)}_nbr${nbrOfHairs}_result_algo:${searchOutsiderPixel.name}.tif")
+      //IJ.save( imgcopy ,     DIRECTORY_RESULTIMAGE+ s"result_delta${"%03d".format(delta)}_nbr${nbrOfHairs}_algo:${searchOutsiderPixel.name}.tif")
     }
 
     // specialPixel =>  delta -> X,Color , return only the x
-    ( specialPixel.map(_.x) , countHairsOverLine( specialPixel.map{ x=> LineColor(x.x, x.c)}))
+    ( specialPixel.map(_.x) , nbrOfHairs)
   }
   
   
