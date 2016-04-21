@@ -173,9 +173,29 @@ object SearchHairs {
     }
     
     // Delta ->  List( X of interest)
-    val mapDeltaX= deltaVsHaire.map{ x=> (x._1,x._2._1)}.toMap
-    val ourhairs=followHair(mapDeltaX)
+    val mapDeltaListX= deltaVsHaire.map{ x=> (x._1,x._2._1)}.toMap
+    val ourhairs=followHair(mapDeltaListX)
     
+    val allDistincsPixelsMarks = mapDeltaListX.map{ 
+      delta_listx => delta_listx._2.map{ 
+        x =>  
+          val y=delta_listx._1 + ourfunction.value(x)
+          Pixel( x, y.toInt)
+      }
+    }.flatten.toList.distinct
+   
+    
+    /*
+     * generate a picture using the orginial img as base and add as white the pixels
+     * who are supposed to be part of a hair.
+     */
+    val allPixelsMarksAsPartOfHaires=originalimg.copyToNewImg("fullHair" )
+    val procfullhair=allPixelsMarksAsPartOfHaires.getProcessor
+    procfullhair.setColor( WHITE)
+    allDistincsPixelsMarks.foreach { pixel => 
+        procfullhair.drawPixel(pixel.x, pixel.y)
+    }
+    IJ.save( allPixelsMarksAsPartOfHaires , DIRECTORY_RESULTIMAGE+ s"allPixelsHair.tif")
     
     
     val allidhairs=ourhairs.map( _._1._2).distinct
