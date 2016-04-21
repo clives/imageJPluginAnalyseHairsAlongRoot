@@ -176,13 +176,20 @@ import SearchHairs._
         }
         val ourfunctionOverLine = new PolynomialFunction(polyfitterOverLine.fit(obsOverLine.toList) )
         
-        val meanVariation=ourpixels.map{ x=> Math.abs(ourfunctionOverLine.value(x.x)-x.c)  }.reduce(_+_) / ourpixels.size
-        println(s"meanVariation:$meanVariation")
+        val colormean=ourpixels.map{ x=> Math.abs(x.c)  }.reduce(_+_) / ourpixels.size
+        val stdDeviation=Math.sqrt( ourpixels.map{ x=> Math.pow(x.c-colormean,2)  }.sum / ourpixels.size)
+        
+        
+        println(s"colormean:$colormean, stdDeviation:$stdDeviation")
+        
+        //val medianDiffSMA=ourpixels.map{ x=> Math.abs(ourfunctionOverLine.value(x.x))  }.reduce(_+_) / ourpixels.size
+              
+       // val resutl=xAndDiffSMA.filter{ x =>  x._2<0 &&   Math.abs(x._2) > 2*stdDeviation}.map(_._1)
         
         val xOverLineAndOverMean = ourpixels.filter{
             position => 
               position.c < ourfunctionOverLine.value( position.x) &&
-              (  ourfunctionOverLine.value( position.x)  - position.c  > meanVariation+10)
+              (  ourfunctionOverLine.value( position.x)  - position.c  > (1.0d*stdDeviation) )
                        
         }
         
