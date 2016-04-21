@@ -28,7 +28,9 @@ can be part of a hair.
 
 ![](doc_images/src_image_01.jpg "ttt")
 
-using: https://github.com/clives/imageJ_hairCountingOverRoot/blob/dda0b5ed8ca0c61878fdf62fe958b80f621ce89e/src/main/scala/algo/outsiderpixel.scala 
+using: https://github.com/clives/imageJ_hairCountingOverRoot/blob/dda0b5ed8ca0c61878fdf62fe958b80f621ce89e/src/main/scala/algo/outsiderpixel.scala                    
+
+
 ![](imageresult/allPixelsHair_dda0b5ed8ca0c61878fdf62fe958b80f621ce89e.jpg "ttt")
 
 (still need to remove alone pixel, then regroup the pixel by hair)
