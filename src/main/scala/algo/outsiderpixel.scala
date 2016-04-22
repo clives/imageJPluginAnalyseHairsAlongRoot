@@ -176,8 +176,8 @@ import SearchHairs._
         }
         val ourfunctionOverLine = new PolynomialFunction(polyfitterOverLine.fit(obsOverLine.toList) )
         
-        val colormean=ourpixels.map{ x=> Math.abs(x.c)  }.reduce(_+_) / ourpixels.size
-        val stdDeviation=Math.sqrt( ourpixels.map{ x=> Math.pow(x.c-colormean,2)  }.sum / ourpixels.size)
+        val colormean=ourpixels.map{ x=> Math.abs(ourfunctionOverLine.value( x.x) - x.c)  }.reduce(_+_) / ourpixels.size
+        val stdDeviation=Math.sqrt( ourpixels.map{ x=> Math.pow(ourfunctionOverLine.value( x.x) - x.c -colormean,2)  }.sum / ourpixels.size)
         
         
         println(s"colormean:$colormean, stdDeviation:$stdDeviation")
@@ -186,16 +186,22 @@ import SearchHairs._
               
        // val resutl=xAndDiffSMA.filter{ x =>  x._2<0 &&   Math.abs(x._2) > 2*stdDeviation}.map(_._1)
         
+        
+        val threshold = stdDeviation + 5
+        
         val xOverLineAndOverMean = ourpixels.filter{
             position => 
               position.c < ourfunctionOverLine.value( position.x) &&
-              (  ourfunctionOverLine.value( position.x)  - position.c  > (1.0d*stdDeviation) )
+              (  ourfunctionOverLine.value( position.x)  - position.c  > (threshold) )
                        
         }
         
-        val newapproximateline=approximateLine ++ ourpixels.map{ linecolor => LineColor( linecolor.x, ourfunctionOverLine.value(linecolor.x).toInt)}
+        xOverLineAndOverMean.foreach { x => println(s"Keep: $x   Line:${ourfunctionOverLine.value( x.x)}  value:${x.c}" ) }
         
-        consumeline( nextpixels, blocksize, result ++ xOverLineAndOverMean, newapproximateline)
+        val createnewapproximate= ourpixels.map{ linecolor => LineColor( linecolor.x, ourfunctionOverLine.value(linecolor.x).toInt)}
+        val newapproximateline=approximateLine ++ createnewapproximate ++ createnewapproximate.map{xc => LineColor(xc.x, xc.c -threshold.toInt) }
+        
+        consumeline( nextpixels, blocksize, result ++ xOverLineAndOverMean, newapproximateline )
       }
     }
     

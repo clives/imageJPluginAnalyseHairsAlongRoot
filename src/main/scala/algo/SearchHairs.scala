@@ -281,8 +281,10 @@ object SearchHairs {
       //test better way to check outside pixel
       val analyse=x_color.tail.zip(x_color).map{
         case (last,current) =>
-          if( Math.abs(last.c - current.c ) < 10 ) (current.x,current.c) 
-          else (current.x,400)
+          //if( Math.abs(last.c - current.c ) < 10 ) 
+            
+            (current.x,current.c) 
+          //else (current.x,400)
       }
       
       //Draw the line (x,color)
