@@ -30,8 +30,9 @@ can be part of a hair.
 
 using: https://github.com/clives/imageJ_hairCountingOverRoot/blob/dda0b5ed8ca0c61878fdf62fe958b80f621ce89e/src/main/scala/algo/outsiderpixel.scala                    
 
+new SearchOutsidersPixelUsingMultiplePolyRegression(50,1)
 
-![](imageresult/allPixelsHair_dda0b5ed8ca0c61878fdf62fe958b80f621ce89e.jpg "ttt")
+![](doc_images/allPixelsHair_dda0b5ed8ca0c61878fdf62fe958b80f621ce89e.jpg "ttt")
 
 (still need to remove alone pixel, then regroup the pixel by hair)
 
@@ -39,6 +40,17 @@ using: https://github.com/clives/imageJ_hairCountingOverRoot/blob/dda0b5ed8ca0c6
 
 https://github.com/clives/imageJ_hairCountingOverRoot/blob/ee8edc0d0d2dd59a55f8769d42cb8b8a941bdfad/src/main/scala/algo/outsiderpixel.scala        
 
+new SearchOutsidersPixelUsingMultiplePolyRegression(50,1)  
+
+![](doc_images/allPixelsHair_ee8edc0d0d2dd59a55f8769d42cb8b8a941bdfad.jpg "ttt")
+
+Same algorithm with a small change in the threshold,
+before ```threshold = stdDeviation + 5```
+now ```threshold = if( stdDeviation < 5 ) 5 else stdDeviation```   
+using a step of 1 along delta:
+
+![](doc_images/allPixelsHair_ee8edc0d0d2dd59a55f8769d42cb8b8a941bdfad_b.jpg "ttt")
 
 
-![](imageresult/allPixelsHair_ee8edc0d0d2dd59a55f8769d42cb8b8a941bdfad.jpg "ttt")
+
+
