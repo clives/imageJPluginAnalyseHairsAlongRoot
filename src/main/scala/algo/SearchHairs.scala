@@ -196,8 +196,20 @@ object SearchHairs {
         procfullhair.drawPixel(pixel.x, pixel.y)
     }
     IJ.save( allPixelsMarksAsPartOfHaires , DIRECTORY_RESULTIMAGE+ s"allPixelsHair.tif")
+    val imgKeepResult=imagej.tools.createBlankImage("detectedPixels", originalimg)
+    val procKeep=imgKeepResult.getProcessor
+    procKeep.setColor( BLACK)
+    procKeep.fill()
+    procKeep.setColor( WHITE)
+    allDistincsPixelsMarks.foreach { pixel => 
+        procKeep.drawPixel(pixel.x, pixel.y)
+    }
+    IJ.save( imgKeepResult , DIRECTORY_RESULTIMAGE+ s"testResultPixel.tif")
+    //
     
     
+    
+    /* Create one picture by hair detected
     val allidhairs=ourhairs.map( _._1._2).distinct
     
     allidhairs.map{ idhair =>
@@ -214,7 +226,7 @@ object SearchHairs {
           }        
       }
       IJ.save( onehair , DIRECTORY_RESULTIMAGE+ s"oneHair_id${idhair}.tif")
-    }
+    }*/
     
     println(s"We have detected : ${deltaVsHaire.map{ delta_nbr => s"delta: ${delta_nbr._1} => nbrHairs: ${delta_nbr._2._2} "  }.mkString(",")}");
     
@@ -256,8 +268,8 @@ object SearchHairs {
       specialPixel.foreach{
         pixel_color => proc.drawPixel(pixel_color.x, delta + ourline.value( pixel_color.x).toInt)       
       }
-      imgcopy.show()
-      imgcopy.updateAndDraw()
+     // imgcopy.show()
+    //  imgcopy.updateAndDraw()
       
       
       val img_x_color=createBlankImage( "x_color_delta_$delta", img)     
