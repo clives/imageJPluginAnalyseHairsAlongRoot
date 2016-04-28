@@ -3,8 +3,10 @@ package algo
 import org.apache.commons.math3.analysis.polynomials.PolynomialFunction
 import org.apache.commons.math3.fitting.PolynomialCurveFitter
 import org.apache.commons.math3.fitting.WeightedObservedPoints
-
 import SearchHairs._
+import org.apache.commons.math3.stat.regression.OLSMultipleLinearRegression
+import org.apache.commons.math3.optimization.fitting.PolynomialFitter
+
   
 
  /*
@@ -146,9 +148,49 @@ import SearchHairs._
    */
   class SearchOutsidersPixelUsingMultiplePolyRegression( size:Int, polyLevel:Int) extends SearchOutsiderPixels {
     def name=s"MultiPolyReg($size,$polyLevel)"
-    
+    val EMAperiod=25
+    val EMAmultiplier = 2.0d/( EMAperiod +1.0d)
     var aproximateLine: List[LineColor]=List.empty
     def getAproximateLine(): List[LineColor]=aproximateLine
+    
+    
+    //first ema == sma, then last(ema)+(2 / (Time periods + 1) )*currentValue
+    // {Close - EMA(previous day)} x multiplier + EMA(previous day).
+    private def ema( data:List[Int], currentema: Double ,result: List[Int]=List.empty):List[Int]={
+      if( data.isEmpty || data.size < EMAperiod ) result
+      else{
+        val currentresult=currentema + EMAmultiplier * ( data.head - currentema)
+        ema( data.tail, currentresult,result :+ currentresult.toInt )
+      }
+    }
+    
+    
+    
+    /*
+     * to improve the linearegression we are going to generate a linearegression
+     * evaluate the stdDeviation, if the stdDeviation >  X, we remove the N elements with the 
+     * largest distance with the line. To repeat until stdDeviation < X
+     */
+    def improveLinearRegression( currentpixels: List[LineColor] ):PolynomialFunction={
+      val polyfitterOverLine= PolynomialCurveFitter.create(polyLevel);
+      val obsOverLine = new WeightedObservedPoints();
+      currentpixels.foreach{ p =>
+        obsOverLine.add( p.x.toDouble, p.c.toDouble )
+      }
+      val ourfunctionOverLine = new PolynomialFunction(polyfitterOverLine.fit(obsOverLine.toList) )
+      val colormean=currentpixels.map{ x=> Math.abs(ourfunctionOverLine.value( x.x) - x.c)  }.reduce(_+_) / currentpixels.size
+      val stdDeviation=Math.sqrt( currentpixels.map{ x=> Math.pow(ourfunctionOverLine.value( x.x) - x.c -colormean,2)  }.sum / currentpixels.size)
+      
+      
+      
+      if( stdDeviation < 2 ) ourfunctionOverLine
+      else{
+        val pixeltoremove=currentpixels.map{ p =>
+              (p,Math.abs(ourfunctionOverLine.value( p.x)  - p.c))                       
+        }.sortBy(-_._2).take(5)
+        improveLinearRegression( currentpixels.filter { x => !pixeltoremove.map(_._1).contains(x) })
+      }
+    }
     
     /*
      * consume all the line, consuming at each step a dimension of at maximum blocksize
@@ -156,25 +198,42 @@ import SearchHairs._
      * 
      * @param approximateLine  - the line generated using the poly regression. only for debug
      */
-    def consumeline( currentpixels: List[LineColor] , blocksize: Int, result:List[LineColor] =List.empty, approximateLine: List[LineColor]=List.empty ): (List[LineColor],List[LineColor])={
+    def consumeline( currentpixels: List[LineColor] ,emapixels: List[LineColor], blocksize: Int, result:List[LineColor] =List.empty, approximateLine: List[LineColor]=List.empty ): (List[LineColor],List[LineColor])={
       if( currentpixels.isEmpty ) (result, approximateLine)
       else{
         
         
         //better double blocksize at the end of the line using a almost empty line
-        val (ourpixels, nextpixels) = if( currentpixels.size < 2*blocksize){
-          (currentpixels, List.empty[LineColor])
+        val (ourpixels, nextpixels, ourema, nextema) = if( currentpixels.size < 2*blocksize){
+          (currentpixels, List.empty[LineColor], emapixels, List.empty[LineColor])
         }else{
-          (currentpixels.take(blocksize),currentpixels.drop(blocksize )) 
+          (currentpixels.take(blocksize),currentpixels.drop(blocksize ),emapixels.take(blocksize), emapixels.drop(blocksize)) 
         }
         
-        
+
         val polyfitterOverLine= PolynomialCurveFitter.create(polyLevel);
         val obsOverLine = new WeightedObservedPoints();
         ourpixels.foreach{ p =>
           obsOverLine.add( p.x.toDouble, p.c.toDouble )
         }
-        val ourfunctionOverLine = new PolynomialFunction(polyfitterOverLine.fit(obsOverLine.toList) )
+        
+//        //attempt to improve poly adding some values
+//        val ourTopNMaxColor=ourpixels.sortBy { x => -x.c }.take(10)
+//        ourTopNMaxColor.foreach{ p =>
+//          obsOverLine.add( p.x.toDouble, p.c.toDouble )
+//        }
+//        
+//        val ourmaxColor=ourpixels.map(_.c).max
+//        val ourminX=ourpixels.map(_.x).min
+//        val ourmaxX=ourpixels.map(_.x).max
+//        for( x <- ourminX until  ourmaxX by 5){
+//          obsOverLine.add( x.toDouble, ourmaxColor )
+//        }
+        
+        val ourfunctionOverLine = improveLinearRegression(  ourpixels)
+          
+          
+          //new PolynomialFunction(polyfitterOverLine.fit(obsOverLine.toList) )
         
         val colormean=ourpixels.map{ x=> Math.abs(ourfunctionOverLine.value( x.x) - x.c)  }.reduce(_+_) / ourpixels.size
         val stdDeviation=Math.sqrt( ourpixels.map{ x=> Math.pow(ourfunctionOverLine.value( x.x) - x.c -colormean,2)  }.sum / ourpixels.size)
@@ -187,7 +246,7 @@ import SearchHairs._
        // val resutl=xAndDiffSMA.filter{ x =>  x._2<0 &&   Math.abs(x._2) > 2*stdDeviation}.map(_._1)
         
         
-        val threshold = stdDeviation + 5
+        val threshold = if( stdDeviation < 7 ) 7 else  stdDeviation
         
         val xOverLineAndOverMean = ourpixels.filter{
             position => 
@@ -201,7 +260,7 @@ import SearchHairs._
         val createnewapproximate= ourpixels.map{ linecolor => LineColor( linecolor.x, ourfunctionOverLine.value(linecolor.x).toInt)}
         val newapproximateline=approximateLine ++ createnewapproximate ++ createnewapproximate.map{xc => LineColor(xc.x, xc.c -threshold.toInt) }
         
-        consumeline( nextpixels, blocksize, result ++ xOverLineAndOverMean, newapproximateline )
+        consumeline( nextpixels, nextema,blocksize, result ++ xOverLineAndOverMean, newapproximateline )
       }
     }
     
@@ -209,8 +268,16 @@ import SearchHairs._
       
       val linesize = pixelOnTheLine.size / Math.floor( pixelOnTheLine.size / size) 
       println(s"linesize:$linesize")
-      val (response, debug)=consumeline( pixelOnTheLine, linesize.toInt )  
-      aproximateLine=debug;
+      
+      
+      //add ema on final graphics to get an idea of his possible use
+      val onlycolors= pixelOnTheLine.map(_.c)
+      val emaColor=ema( onlycolors, onlycolors.take(EMAperiod).reduce(_+_)/EMAperiod )
+      val emapixels=pixelOnTheLine.map(_.x).drop(0).zip( emaColor).map{ x=> LineColor(x._1, x._2)}
+      
+      val (response, debug)=consumeline( pixelOnTheLine,emapixels, linesize.toInt )
+      
+      aproximateLine=debug ++ pixelOnTheLine.map(_.x).drop(0).zip( emaColor).map{ x=> LineColor(x._1, x._2+ 50)}
       response
     }
   }
