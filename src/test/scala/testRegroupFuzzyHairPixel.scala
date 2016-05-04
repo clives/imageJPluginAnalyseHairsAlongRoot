@@ -66,7 +66,6 @@ class testRegroupFuzzyHairPixel extends WordSpec {
         val result=allpixelhairs.map{ 
           delta_phair => 
             val listremoveatdelta=pixeltoremove.filter(_.delta == delta_phair._1).map(_.hp)         
-            println("list possible pixel to remove:"+listremoveatdelta.size)
             
             if( listremoveatdelta.nonEmpty ){
               delta_phair._1 -> delta_phair._2.filterNot( listremoveatdelta contains _)
@@ -81,7 +80,6 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       def removeHairPixels( pixelstocheck: List[HairPixelDelta], allpixelhairs: DeltaHairs, pixeltoremove: List[HairPixelDelta] =List.empty):List[HairPixelDelta] ={
         
         if( pixelstocheck.isEmpty ) {
-          println("Size to remove:"+pixeltoremove.size)
           pixeltoremove
         }else{
           val currentpixel= pixelstocheck.head
@@ -102,8 +100,10 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       //
       //----------------------------------------------
       @tailrec
-      def consume(currentpixel: HairPixelDelta, hairs: DeltaHairs, deltas: Range, currentPixel: List[HairPixelDelta]=List.empty): List[HairPixelDelta]={
+      def consume(currentpixel: HairPixelDelta, hairs: DeltaHairs, deltas: Range, currentPixel: List[HairPixelDelta]): List[HairPixelDelta]={
         val next=getNextPixels( currentpixel, hairs, deltas).filter(_.hp.prHair>0.1d).sortBy { -_.hp.prHair }.headOption
+        
+        println("nextPixel:"+next)
         
         val result= currentPixel ++ next
         
@@ -126,7 +126,7 @@ class testRegroupFuzzyHairPixel extends WordSpec {
         println("optStartPixel:"+optStartPixel )
         
         optStartPixel.map{startPixel=>
-          val ourhairpixels=consume( startPixel,mapDeltaHairPixels, deltaRange )
+          val ourhairpixels=consume( startPixel,mapDeltaHairPixels, deltaRange, List(startPixel) )
           println("Pixels size:"+ourhairpixels.size)
           
           //draw it
@@ -164,6 +164,37 @@ class testRegroupFuzzyHairPixel extends WordSpec {
             proctest.drawPixel(hairpixel.x, hairpixel.y.get)
           }
           IJ.save( img_removeoneHaire , DIRECTORY_RESULTIMAGE + s"resultRemoveoneHair.tif")
+          
+          
+          //search second hair
+          
+          val updatemapDeltaHairPixels = cleanHairsPixels( mapDeltaHairPixels, pixeltoremove) 
+          //start with first pixel on the higher delta       
+        val optStartPixel2 = getFirstHairPixel(  deltaRange, updatemapDeltaHairPixels)
+        println("optStartPixel2:"+optStartPixel2 )
+        
+        optStartPixel2.map{startPixel2=>
+          val ourhairpixels=consume( startPixel2,updatemapDeltaHairPixels, deltaRange , List(startPixel2))
+          println("Pixels size:"+ourhairpixels.size)
+          
+          println("remove delta -213 result:"+pixeltoremove.filter( _.delta == -213))
+          
+          println("ourhairpixels delta -213 result:"+ourhairpixels.filter( _.delta == -213))
+          
+          
+          //draw it
+          val img_oneHaire=createBlankImage( "oneHairGrouping", img)
+          val proc= img_oneHaire.getProcessor
+          proc.setColor(255)
+          
+          ourhairpixels.map{
+             pixels =>
+               proc.drawPixel(pixels.hp.x, pixels.hp.y.get)
+               
+          }
+          IJ.save( img_oneHaire , DIRECTORY_RESULTIMAGE + s"twoHair.tif")
+          }
+          
         }
       }
     }
