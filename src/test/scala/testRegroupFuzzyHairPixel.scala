@@ -14,9 +14,13 @@ class testRegroupFuzzyHairPixel extends WordSpec {
 "searchHaires" when {
     "use delta from 10ss to 16" should {
       
-      case class HairPixelDelta(  x: Int, y: Int, prHair: Double, delta: Int){
-        override def toString()=s"x: $x, pr: $prHair, detla: $delta"
+      case class HairPixelDelta(  hp: HairPixel, delta: Int){
+        override def toString()=s"hairpixel: $hp, delta: $delta"
+        
+        
       }
+      
+      
       
       type DeltaHairs = Map[Int, List[HairPixel]];
       
@@ -24,12 +28,13 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       //----------------------------------------------
       def getFirstHairPixel(deltas: Range, delta_hairpixel:Map[Int, List[HairPixel]] ):Option[HairPixelDelta]={
        val delta=deltas.head
-       val ourfirstpixel=(delta_hairpixel.get(delta).map{
-         l=>l.filter(_.prHair == 1.0).headOption
+       val ourfirstpixelHigherPr=(delta_hairpixel.get(delta).map{
+         l=>
+           l.filter(_.prHair == 1.00d).headOption
        }).flatten
        
-       if( ourfirstpixel.isDefined )
-         ourfirstpixel.map{ p => HairPixelDelta(p.x,p.y.get,p.prHair, delta )}
+       if( ourfirstpixelHigherPr.isDefined )
+         ourfirstpixelHigherPr.map{ p => HairPixelDelta(p, delta )}
        else
          getFirstHairPixel(deltas.tail, delta_hairpixel)  
       }
@@ -38,12 +43,12 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       // get neighbour ( raising delta for the moment)
       //----------------------------------------------
       def getNextPixels( currentpixel: HairPixelDelta,hairs: DeltaHairs, deltas: Range )={
-        val listx=List( currentpixel.x, currentpixel.x+1, currentpixel.x-1)
+        val listx=List( currentpixel.hp.x, currentpixel.hp.x+1, currentpixel.hp.x-1)
         val nextdelta=currentpixel.delta+1
         
         if( deltas.contains(nextdelta)){
           val lPossiblepixels=hairs.get( nextdelta).toList.flatten.filter{ p => listx.contains( p.x)}   
-          lPossiblepixels.map{ p=> HairPixelDelta(p.x,p.y.get, p.prHair, nextdelta)}
+          lPossiblepixels.map{ p=> HairPixelDelta(p, nextdelta)}
         }else{
           List.empty
         }
@@ -51,12 +56,44 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       
       import scala.annotation.tailrec
       
+      
       //----------------------------------------------
-      // Consume only 1.0 pr for the moment
+      // remove from allpixelhairs: DeltaHairs the pixels 
+      // present in pixeltoremove: List[HairPixelDelta]
+      //----------------------------------------------
+      def cleanHairsPixels(allpixelhairs: DeltaHairs, pixeltoremove: List[HairPixelDelta])={
+        val deltastocheck=pixeltoremove.map(_.delta).distinct
+        
+      }
+      
+      // once we detected a hair, with have to remove all the pixels around
+      @tailrec
+      def removeHairPixels( pixelstocheck: List[HairPixelDelta], allpixelhairs: DeltaHairs, pixeltoremove: List[HairPixelDelta] =List.empty):List[HairPixelDelta] ={
+        
+        if( pixelstocheck.isEmpty ) {
+          println("Size to remove:"+pixeltoremove.size)
+          pixeltoremove
+        }else{
+          val currentpixel= pixelstocheck.head
+          val neighbours = List( currentpixel.hp.x+1, currentpixel.hp.x-1)
+          
+          //visit if not present in pixelstocheck and pixeltoremove and prHair > 0.5
+          val nextToVisit=(allpixelhairs.get(currentpixel.delta).toList.flatten.filter{p=> neighbours contains p.x}.map{
+            p => new HairPixelDelta(p, currentpixel.delta)
+          }).filter (_.hp.prHair > 0.3).filterNot( pixeltoremove contains _).filterNot( pixelstocheck contains _)
+          
+          removeHairPixels( pixelstocheck.tail ++ nextToVisit, allpixelhairs, currentpixel::pixeltoremove)
+        }
+      }
+      
+      
+      //----------------------------------------------
+      // Consume only >0.1 pr for the moment
+      //
       //----------------------------------------------
       @tailrec
       def consume(currentpixel: HairPixelDelta, hairs: DeltaHairs, deltas: Range, currentPixel: List[HairPixelDelta]=List.empty): List[HairPixelDelta]={
-        val next=getNextPixels( currentpixel, hairs, deltas).filter(_.prHair==1.0d).headOption
+        val next=getNextPixels( currentpixel, hairs, deltas).filter(_.hp.prHair>0.1d).sortBy { -_.hp.prHair }.headOption
         
         val result= currentPixel ++ next
         
@@ -89,10 +126,23 @@ class testRegroupFuzzyHairPixel extends WordSpec {
           
           ourhairpixels.map{
              pixels =>
-               proc.drawPixel(pixels.x, pixels.y)
+               proc.drawPixel(pixels.hp.x, pixels.hp.y.get)
                
           }
           IJ.save( img_oneHaire , DIRECTORY_RESULTIMAGE + s"oneHair.tif")
+          
+          //Cleaning:
+          val pixeltoremove=removeHairPixels( ourhairpixels,mapDeltaHairPixels)
+          proc.setColor(0)
+          proc.fill()
+          proc.setColor(255)
+          pixeltoremove.map{
+             pixels =>
+               proc.drawPixel(pixels.hp.x, pixels.hp.y.get)
+               
+          }
+          IJ.save( img_oneHaire , DIRECTORY_RESULTIMAGE + s"removeoneHair.tif")
+          
         }
       }
     }
