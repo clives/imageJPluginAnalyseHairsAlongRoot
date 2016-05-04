@@ -61,9 +61,19 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       // remove from allpixelhairs: DeltaHairs the pixels 
       // present in pixeltoremove: List[HairPixelDelta]
       //----------------------------------------------
-      def cleanHairsPixels(allpixelhairs: DeltaHairs, pixeltoremove: List[HairPixelDelta])={
+      def cleanHairsPixels(allpixelhairs: DeltaHairs, pixeltoremove: List[HairPixelDelta]): DeltaHairs={
         val deltastocheck=pixeltoremove.map(_.delta).distinct
-        
+        val result=allpixelhairs.map{ 
+          delta_phair => 
+            val listremoveatdelta=pixeltoremove.filter(_.delta == delta_phair._1).map(_.hp)         
+            println("list possible pixel to remove:"+listremoveatdelta.size)
+            
+            if( listremoveatdelta.nonEmpty ){
+              delta_phair._1 -> delta_phair._2.filterNot( listremoveatdelta contains _)
+            }else
+              delta_phair
+        }               
+        result
       }
       
       // once we detected a hair, with have to remove all the pixels around
@@ -143,6 +153,17 @@ class testRegroupFuzzyHairPixel extends WordSpec {
           }
           IJ.save( img_oneHaire , DIRECTORY_RESULTIMAGE + s"removeoneHair.tif")
           
+          
+          //test remove
+          val img_removeoneHaire=createBlankImage( "oneHairGrouping", img)
+          val proctest= img_removeoneHaire.getProcessor
+          proctest.setColor(RED)
+          proctest.fill()
+          proctest.setColor(BLACK)
+          cleanHairsPixels( mapDeltaHairPixels, pixeltoremove).toList.map(_._2).flatten.foreach{ hairpixel =>
+            proctest.drawPixel(hairpixel.x, hairpixel.y.get)
+          }
+          IJ.save( img_removeoneHaire , DIRECTORY_RESULTIMAGE + s"resultRemoveoneHair.tif")
         }
       }
     }
