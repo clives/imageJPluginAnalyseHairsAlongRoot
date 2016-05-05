@@ -30,6 +30,17 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       
       type DeltaHairs = Map[Int, List[HairPixel]];
       
+      
+      case class destinationFiles(directoryName: String){
+        val resultImage= DIRECTORY_RESULTIMAGE + directoryName
+        val fullPixelHairs= DIRECTORY_RESULTIMAGE +  directoryName + "fullhairs/"
+        val hairs = DIRECTORY_RESULTIMAGE +  directoryName + "hairs/"
+        
+        new java.io.File(resultImage).mkdir()
+        new java.io.File(fullPixelHairs).mkdir()
+        new java.io.File(hairs).mkdir()
+      }
+      
       //----------------------------------------------
       //----------------------------------------------
       def getFirstHairPixel(deltas: Range, delta_hairpixel:Map[Int, List[HairPixel]] ):Option[HairPixelDelta]={
@@ -49,18 +60,22 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       }
       
       //----------------------------------------------
-      // get neighbour ( raising delta for the moment)
+      // get Neighbour ( raising delta for the moment)
+      // update 05/05/2016 : consume all the nextpixels, delta { -1, 0 , 1}+currentDelta
       //----------------------------------------------
       def getNextPixels( currentpixel: HairPixelDelta,hairs: DeltaHairs, deltas: Range )={
         val listx=List( currentpixel.hp.x, currentpixel.hp.x+1, currentpixel.hp.x-1)
-        val nextdelta=currentpixel.delta+1
+        val nextdeltas=(0 to 1).map( _ + currentpixel.delta )
         
-        if( deltas.contains(nextdelta)){
-          val lPossiblepixels=hairs.get( nextdelta).toList.flatten.filter{ p => listx.contains( p.x)}   
-          lPossiblepixels.map{ p=> HairPixelDelta(p, nextdelta)}
-        }else{
-          List.empty
+        val result=for( nextdelta <- nextdeltas )yield{
+          if( deltas.contains(nextdelta)){
+            val lPossiblepixels=hairs.get( nextdelta).toList.flatten.filter{ p => listx.contains( p.x)}               
+            lPossiblepixels.map{ p=> HairPixelDelta(p, nextdelta)}
+          }else{
+            List.empty
+          }
         }
+        result.flatten.toList.filterNot( _ == currentpixel)
       }
       
       import scala.annotation.tailrec
@@ -120,10 +135,15 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       //----------------------------------------------
       // Consume only >0.1 pr for the moment
       //
+      // update: 5/05/2016 
+      //         for zoneFilter( ourmap, Pixel(37,568), Pixel(100,650))  
+      //         we consume only downloading the trend, we should be able to consume backward(future version) or
+      //         at least on direct Neighbour
       //----------------------------------------------
       @tailrec
       def consume(currentpixel: HairPixelDelta, hairs: DeltaHairs, deltas: Range, currentPixel: List[HairPixelDelta]): List[HairPixelDelta]={
-        val next=getNextPixels( currentpixel, hairs, deltas).filter(_.hp.prHair>0.1d).sortBy { -_.hp.prHair }.headOption
+        val next=getNextPixels( currentpixel, hairs, deltas).filterNot( currentPixel contains _).filter(_.hp.prHair>0.1d).sortBy { -_.hp.prHair }.headOption
+        
         
         val result= currentPixel ++ next
         
@@ -135,9 +155,9 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       }
       
       
-      def consumeHairs(allthepixels: DeltaHairs, deltaRange: Range, imgDst: ImagePlus, currentId: Int=0):Unit={
+      def consumeHairs(allthepixels: DeltaHairs, deltaRange: Range, imgDst: ImagePlus, currentId: Int=0)(implicit dst:destinationFiles):Unit={
         if( currentId > 40){
-          IJ.save( imgDst , DIRECTORY_RESULTIMAGE + s"full_Hairs.tif")
+          IJ.save( imgDst , dst.resultImage + s"full_Hairs.tif")
         }
         else{
           val optStartPixel=getFirstHairPixel(  deltaRange, allthepixels)
@@ -165,7 +185,7 @@ class testRegroupFuzzyHairPixel extends WordSpec {
                  //proc_fullimg.drawPixel(pixels.hp.x, pixels.hp.y.get)
                  
             }
-            IJ.save( img_oneHaire , DIRECTORY_FULLPIXELHAIRS + s"${currentId}_Hair_from_${deltas.min}_to_${deltas.max}.tif")
+            IJ.save( img_oneHaire , dst.fullPixelHairs+ s"${currentId}_Hair_from_${deltas.min}_to_${deltas.max}.tif")
             
             proc.setColor(WHITE)
             proc.fill()
@@ -176,7 +196,7 @@ class testRegroupFuzzyHairPixel extends WordSpec {
                  proc_fullimg.drawPixel(pixels.hp.x, pixels.hp.y.get)
                  
             }
-            IJ.save( img_oneHaire , DIRECTORY_HAIRS + s"${currentId}_Hair_from_${deltas.min}_to_${deltas.max}.tif")
+            IJ.save( img_oneHaire , dst.hairs + s"${currentId}_Hair_from_${deltas.min}_to_${deltas.max}.tif")
             
             
             
@@ -184,7 +204,7 @@ class testRegroupFuzzyHairPixel extends WordSpec {
             
             consumeHairs( updatemapDeltaHairPixels, deltaRange, imgDst, currentId+1)
           }.getOrElse{
-            IJ.save( imgDst , DIRECTORY_RESULTIMAGE + s"endfull_Hairs.tif")
+            IJ.save( imgDst , dst.resultImage + s"endfull_Hairs.tif")
             
 
           }
@@ -211,12 +231,12 @@ class testRegroupFuzzyHairPixel extends WordSpec {
         cleanResultDirectory()
         implicit val searchtoutside =new fuzzySearchOutsidersPixelUsingMultiplePolyRegression(50,1)
         implicit val dd =new searchWhiteToBlackLine();
-        
+        implicit val dst=destinationFiles( "poly_(50,1)_searchWiteToBlack/")
         
         //
         // save file or read file to get the map
         //
-        val mapDeltaHairPixels= if( false){
+        val mapDeltaHairPixels= if( true){
            val ourmap= hairsCount(img,deltaRange)
            val oos = new ObjectOutputStream(new FileOutputStream("saveMapHairs"))
            oos.writeObject(ourmap)
@@ -256,7 +276,7 @@ class testRegroupFuzzyHairPixel extends WordSpec {
                proc.drawPixel(pixels.hp.x, pixels.hp.y.get)
                
           }
-          IJ.save( img_oneHaire , DIRECTORY_RESULTIMAGE + s"oneHair.tif")
+          IJ.save( img_oneHaire , dst.resultImage + s"oneHair.tif")
           
           //Cleaning:
           val pixeltoremove=removeHairPixels( ourhairpixels,mapDeltaHairPixels)
@@ -268,7 +288,7 @@ class testRegroupFuzzyHairPixel extends WordSpec {
                proc.drawPixel(pixels.hp.x, pixels.hp.y.get)
                
           }
-          IJ.save( img_oneHaire , DIRECTORY_RESULTIMAGE + s"removeoneHair.tif")
+          IJ.save( img_oneHaire , dst.resultImage  + s"removeoneHair.tif")
         }
         
         }
