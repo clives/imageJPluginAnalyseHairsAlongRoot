@@ -7,7 +7,7 @@ import SearchHairs._
 import org.apache.commons.math3.stat.regression.OLSMultipleLinearRegression
 import org.apache.commons.math3.optimization.fitting.PolynomialFitter
 import ij.ImagePlus
-
+import ij.IJ
   
 object parallelHairLines{
   // (x,delta)=> Option(y)
@@ -30,6 +30,7 @@ object parallelHairLines{
      */
     def create( img: ImagePlus ):serviceline
     
+    def name:String
   }
 
 import SearchHairs._
@@ -44,6 +45,7 @@ import imagej.tools._
  */
 class searchWhiteToBlackLine extends parallelHairLines{
   
+ def name="searchWhiteToBlackLine"
   
  def create( img: ImagePlus) = {
     //Search polynomial function of the root
@@ -51,14 +53,17 @@ class searchWhiteToBlackLine extends parallelHairLines{
     applyMaximum( img, 15)
     //2 - binary
     val imgBN=createBinary( img, true)
+    
+    IJ.save( imgBN , DIRECTORY_RESULTIMAGE+ s"BN_Image.tif")
+    
     //3 search white pixels
     val xtoMaxY=(for(  x <- 0  until imgBN.getWidth by 1; y <- 0 until imgBN.getHeight; if(imgBN.getPixel(x,y).isWhite)   )yield{
       (x,y)
     }).toList.groupBy{ x_y => x_y._1 }.map{ a => (a._1, a._2.map(_._2).max) }
     
     (x:Int,delta:Int)=>{
-      xtoMaxY.get(x).flatMap{ y=>
-        y +delta
+      xtoMaxY.get(x).flatMap{ basey=>
+        val y = basey +delta
         if( y <0 || y > img.getHeight ) None
         else Some(y)
       }        
@@ -69,6 +74,7 @@ class searchWhiteToBlackLine extends parallelHairLines{
 
 class polyRegressionParallelHairLines extends parallelHairLines{
   
+  def name="polyRegressionParallelHairLines"
   
   def create( img: ImagePlus) = {
     //Search polynomial function of the root
