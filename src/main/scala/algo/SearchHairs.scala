@@ -13,16 +13,38 @@ object SearchHairs {
   import imagej.tools._
   
   final val DIRECTORY_RESULTIMAGE="imageresult/"
+  final val DIRECTORY_FULLPIXELHAIRS="imageresult/fullhairs/"
+  final val DIRECTORY_HAIRS="imageresult/hairs/"
+  
   import java.awt.Color._
   type Delta = Int
   type IDHAIR=Int
   type ColorValue=Int
   case class LineColor( x: Int, c: ColorValue)  
-  case class Pixel( x:Int, y:Int)
+  case class HairPixel( x: Int, c: ColorValue, prHair: Double, y: Option[Int]=None){
+    override def toString()= s"x: $x, c:$c, pr:$prHair, y: $y"
+    
+    def containedBy( start: Pixel, end: Pixel):Boolean ={
+      require( y.isDefined )
+      x >= start.x && x<= end.x && y.get >= start.y && y.get <= end.y
+    }
+  }
+  
+  case class Pixel( x:Int, y:Int, c: Option[ColorValue]=None)
+  
 
-  private def cleanResultDirectory()={
+  def cleanDirectory( direcory: String)={
     for {
-      files <- Option(new File(DIRECTORY_RESULTIMAGE).listFiles)
+      files <- Option(new File(direcory).listFiles)
+      file <- files if file.getName.endsWith(".tif")
+    } file.delete
+  }
+  
+  def cleanResultDirectory()={
+    for {
+      files <- Option(new File(DIRECTORY_RESULTIMAGE).listFiles)++
+                  Option(new File(DIRECTORY_FULLPIXELHAIRS).listFiles)++
+                  Option(new File(DIRECTORY_HAIRS).listFiles)
       file <- files if file.getName.endsWith(".tif")
     } file.delete
   }
@@ -134,54 +156,74 @@ object SearchHairs {
    *            
    * @return    List[ (Delta,nbrHairs)]  - nbr of hairs for each delta defined in the range "deltas"
    */
-  def hairsCount( originalimg_high: ImagePlus, deltas: Range, rotation:Boolean = false)(implicit howto:SearchOutsiderPixels=new SearchParticularPixelUsingPolyRegression() ):List[ (Int,Int)]={
+  def hairsCount( originalimg_high: ImagePlus, deltas: Range, debug:Boolean =false, rotation:Boolean = false)(
+      implicit howto:SearchOutsiderPixels,
+               parallelLines: parallelHairLines )
+      :Map[ Int,List[HairPixel]]={
+    
+    
+    println("SearchOutsiderPixels Name:"+howto.name);
+    println("parallelHairLines Name:"+parallelLines.name);
+    
+    
     //switch from 16 to 8 bits.
     val originalimg =  new ImagePlus( "original", originalimg_high.getProcessor.createImage())
     val img=originalimg.copyToNewImg("workingcopy")
     
     cleanResultDirectory()
     
-    //Search polynomial function of the root
-    //1 - maximum 15
-    applyMaximum( img, 15)
-    //2 - binary
-    val imgBN=createBinary( img, true)
-    //3 search white pixels
-    val ourWhitePixels=for(  x <- 0  until imgBN.getWidth by 1; y <- 0 until imgBN.getHeight; if(imgBN.getPixel(x,y).isWhite)   )yield{
-      (x,y)
-    }
-    
-    val obs = new WeightedObservedPoints();
-    ourWhitePixels.foreach{ p =>
-      obs.add( p._1.toDouble, p._2.toDouble )
-    }
+//    //Search polynomial function of the root
+//    //1 - maximum 15
+//    applyMaximum( img, 15)
+//    //2 - binary
+//    val imgBN=createBinary( img, true)
+//    //3 search white pixels
+//    val ourWhitePixels=for(  x <- 0  until imgBN.getWidth by 1; y <- 0 until imgBN.getHeight; if(imgBN.getPixel(x,y).isWhite)   )yield{
+//      (x,y)
+//    }
+//    
+//    val obs = new WeightedObservedPoints();
+//    ourWhitePixels.foreach{ p =>
+//      obs.add( p._1.toDouble, p._2.toDouble )
+//    }
     
     if( rotation ){
       val polyfitter= PolynomialCurveFitter.create(2); //Poly 3
       
     }
     
-    val polyfitter= PolynomialCurveFitter.create(12); //Poly 3
-    val coef=polyfitter.fit(obs.toList());
-    println(s"coef : ${coef.mkString}");
-    val ourfunction = new PolynomialFunction(coef )
+//    val polyfitter= PolynomialCurveFitter.create(12); //Poly 3
+//    val coef=polyfitter.fit(obs.toList());
+//
+//    val ourfunction = new PolynomialFunction(coef )
     originalimg.updateAndDraw()
     
+    
+    val ourfunction=parallelLines.create(img)
+    
     val deltaVsHaire= deltas.toList.map{ delta =>
-      val result= hairsCount( originalimg, ourfunction, delta, true)
+      
+      
+      val tempresult= hairsCount( originalimg, ourfunction, delta, debug)
+      
+      //add y
+      val result= ( tempresult._1.map{ p=> p.copy( y =ourfunction(p.x,delta))}, tempresult._2)
       (delta, result)
     }
     
     // Delta ->  List( X of interest)
     val mapDeltaListX= deltaVsHaire.map{ x=> (x._1,x._2._1)}.toMap
-    val ourhairs=followHair(mapDeltaListX)
+    
+    //remove for the moment, does not works
+   // val ourhairs=followHair(mapDeltaListX)
     
     val allDistincsPixelsMarks = mapDeltaListX.map{ 
-      delta_listx => delta_listx._2.map{ 
-        x =>  
-          val y=delta_listx._1 + ourfunction.value(x)
-          Pixel( x, y.toInt)
-      }
+      delta_listx => (delta_listx._2.map{ 
+        hairpixel =>  
+          ourfunction(hairpixel.x,delta_listx._1).map{
+            y=> Pixel( hairpixel.x, y, Some((hairpixel.prHair * 255).toInt)  )
+          }          
+      }).flatten
     }.flatten.toList.distinct
    
     
@@ -193,6 +235,7 @@ object SearchHairs {
     val procfullhair=allPixelsMarksAsPartOfHaires.getProcessor
     procfullhair.setColor( WHITE)
     allDistincsPixelsMarks.foreach { pixel => 
+        pixel.c.map { color => procfullhair.setColor(color) }
         procfullhair.drawPixel(pixel.x, pixel.y)
     }
     IJ.save( allPixelsMarksAsPartOfHaires , DIRECTORY_RESULTIMAGE+ s"allPixelsHair.tif")
@@ -230,27 +273,25 @@ object SearchHairs {
     
     println(s"We have detected : ${deltaVsHaire.map{ delta_nbr => s"delta: ${delta_nbr._1} => nbrHairs: ${delta_nbr._2._2} "  }.mkString(",")}");
     
-    imgBN.show()
-    imgBN.updateAndDraw()
-    
     originalimg.show();
     originalimg.updateAndDraw()
     
-    deltaVsHaire.map{ x => (x._1, x._2._2)}
+    //deltaVsHaire.map{ x => (x._1, x._2._2)}
+    
+    mapDeltaListX
   }
   
-  
+  import parallelHairLines._
   /*
    * count the number of hairs for a specific delta and give the list of pixel who are suppose to
    * be parts of a hair.
    * 
    * @return ( list pixels along the line at delta who belongs to hairs, nbr of hairs)
    */
-  def hairsCount( img: ImagePlus, ourline: PolynomialFunction, delta: Int, debug: Boolean  )(implicit searchOutsiderPixel:SearchOutsiderPixels) :(List[Int],Int)={
+  def hairsCount( img: ImagePlus, ourline: serviceline, delta: Int, debug: Boolean  )(implicit searchOutsiderPixel:SearchOutsiderPixels) :(List[HairPixel],Int)={
     
-    println(s"Coefficient for delta $delta :"+ourline.getCoefficients().mkString(";"));
-
-    val x_color=searchPixelValueOnPolyLine( img , ourline, delta)
+    val x_color=searchPixelValueOnPolyLine( img , ourline, delta).toList
+   // println(s"------------ getOutsiderPixelAlongTheLine for delta <<$delta>> ----------------")
     val specialPixel=searchOutsiderPixel.getOutsiderPixelAlongTheLine( x_color)
     val nbrOfHairs= countHairsOverLine( specialPixel.map{ x=> LineColor(x.x, x.c)})
     
@@ -262,14 +303,26 @@ object SearchHairs {
       //can swith to x_color to see the whole line specialPixel
       proc.setColor( java.awt.Color.BLACK)
       x_color.foreach{
-        pixel_color => proc.drawPixel(pixel_color.x, delta + ourline.value( pixel_color.x).toInt)       
+        pixel_color => 
+          ourline( pixel_color.x,delta).map{
+             y => 
+               proc.drawPixel(pixel_color.x,y )
+          }                
       }
+      
+      //
+      // Draw over the original image the line. 
+      // Black => not hair, white => Hair, beetween => pr. hair, darker less proba.
+      //
       proc.setColor( java.awt.Color.WHITE)
-      specialPixel.foreach{
-        pixel_color => proc.drawPixel(pixel_color.x, delta + ourline.value( pixel_color.x).toInt)       
+      specialPixel.foreach{ hairpixel=>        
+        ourline( hairpixel.x, delta).map{
+          y=>
+            proc.setColor(  hairpixel.prHair * 255)
+            proc.drawPixel(hairpixel.x, y)
+        }         
       }
-     // imgcopy.show()
-    //  imgcopy.updateAndDraw()
+
       
       
       val img_x_color=createBlankImage( "x_color_delta_$delta", img)     
@@ -288,7 +341,7 @@ object SearchHairs {
       proc_img_x_color.setColor(java.awt.Color.RED)
       //draw the appoximate line
       searchOutsiderPixel.getAproximateLine().foreach{ x_y => 
-        proc_img_x_color.drawPixel(x_y.x, x_y.c + 0) }
+        proc_img_x_color.drawPixel(x_y.x, x_y.y + 150) }
       
       //test better way to check outside pixel
       val analyse=x_color.tail.zip(x_color).map{
@@ -309,9 +362,9 @@ object SearchHairs {
       IJ.save( imgcopy ,     DIRECTORY_RESULTIMAGE+ s"img_x_color_delta${"%03d".format(delta)}_nbr${nbrOfHairs}_result_algo:${searchOutsiderPixel.name}.tif")
       //IJ.save( imgcopy ,     DIRECTORY_RESULTIMAGE+ s"result_delta${"%03d".format(delta)}_nbr${nbrOfHairs}_algo:${searchOutsiderPixel.name}.tif")
     }
-
+    
     // specialPixel =>  delta -> X,Color , return only the x
-    ( specialPixel.map(_.x) , nbrOfHairs)
+    ( specialPixel , nbrOfHairs)
   }
   
   
@@ -346,13 +399,18 @@ object SearchHairs {
    * 
    * delta - permits to move the line over y (up / down)
    */
-  private def searchPixelValueOnPolyLine( img: ImagePlus, ourline: PolynomialFunction, delta: Int )={
+  private def searchPixelValueOnPolyLine( img: ImagePlus, ourline: serviceline, delta: Int )={
     val proc=img.getProcessor
-    val pixelValueOverTheLine = for( x <- 0 until img.getWidth )yield{
-      val valueatx=proc.getPixel(  x , ourline.value(x).toInt + delta  )   
-      (x,valueatx)
-    }
-    pixelValueOverTheLine.toList.map{ x => LineColor(x._1,x._2)} 
+    val pixelValueOverTheLine = (for( x <- 0 until img.getWidth)yield{
+      
+      ourline(x,delta).map{
+        y =>
+          val valueatx=proc.getPixel(  x , y )   
+          LineColor(x,valueatx)
+      }
+      
+    }).flatten
+    pixelValueOverTheLine
   }
 
 }

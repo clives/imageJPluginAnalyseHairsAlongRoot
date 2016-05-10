@@ -31,7 +31,8 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       type DeltaHairs = Map[Int, List[HairPixel]];
       
       
-      case class destinationFiles(directoryName: String){
+      case class destinationFiles(directoryName: String){       
+        
         val resultImage= DIRECTORY_RESULTIMAGE + directoryName
         val fullPixelHairs= DIRECTORY_RESULTIMAGE +  directoryName + "fullhairs/"
         val hairs = DIRECTORY_RESULTIMAGE +  directoryName + "hairs/"
@@ -39,6 +40,10 @@ class testRegroupFuzzyHairPixel extends WordSpec {
         new java.io.File(resultImage).mkdir()
         new java.io.File(fullPixelHairs).mkdir()
         new java.io.File(hairs).mkdir()
+        
+        cleanDirectory( resultImage)
+        cleanDirectory( fullPixelHairs)
+        cleanDirectory( hairs)
       }
       
       //----------------------------------------------
@@ -131,6 +136,7 @@ class testRegroupFuzzyHairPixel extends WordSpec {
         }
       }
       
+
       
       //----------------------------------------------
       // Consume only >0.1 pr for the moment
@@ -141,8 +147,10 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       //         at least on direct Neighbour
       //----------------------------------------------
       @tailrec
-      def consume(currentpixel: HairPixelDelta, hairs: DeltaHairs, deltas: Range, currentPixel: List[HairPixelDelta]): List[HairPixelDelta]={
-        val next=getNextPixels( currentpixel, hairs, deltas).filterNot( currentPixel contains _).filter(_.hp.prHair>0.1d).sortBy { -_.hp.prHair }.headOption
+      def consume(currentpixel: HairPixelDelta, hairs: DeltaHairs, deltas: Range, currentPixel: List[HairPixelDelta], howtosort: ( HairPixelDelta, HairPixelDelta )=> Boolean
+        = (A,B) => A.hp.prHair>B.hp.prHair    
+      ): List[HairPixelDelta]={
+        val next=getNextPixels( currentpixel, hairs, deltas).filterNot( currentPixel contains _).filter(_.hp.prHair>0.1d).sortWith(howtosort).headOption
         
         
         val result= currentPixel ++ next
@@ -150,10 +158,23 @@ class testRegroupFuzzyHairPixel extends WordSpec {
         next match{
           case None => result
           case Some(nextcurrentpixel)=>
-            consume(  nextcurrentpixel, hairs, deltas, result)
+            consume(  nextcurrentpixel, hairs, deltas, result, howtosort)
         }     
       }
       
+      /*
+       * 
+
+
+var arrayLength = this.inputWires.length;
+var inputIndex=-1;
+for (var i = 0; i < arrayLength; i++) {
+    if( this.inputWires[i][0]==msg.idSender ){
+    	inputIndex = i;
+    }
+}
+       * 
+       */
       
       def consumeHairs(allthepixels: DeltaHairs, deltaRange: Range, imgDst: ImagePlus, currentId: Int=0)(implicit dst:destinationFiles):Unit={
         if( currentId > 40){
@@ -165,7 +186,19 @@ class testRegroupFuzzyHairPixel extends WordSpec {
             
             println(s"Start point for id$currentId, $startPixel")
             
-            val ourhairpixels=consume( startPixel,allthepixels, deltaRange, List(startPixel) )            
+            val howtosortRight= ( A: HairPixelDelta, B: HairPixelDelta )=> {
+              if(A.delta == B.delta && A.hp.prHair == B.hp.prHair) A.hp.x > B.hp.x //high x better
+              else if( A.delta == B.delta ) A.hp.prHair > B.hp.prHair  //higher pr better
+              else A.delta > B.delta //higher delta better
+            }
+            
+            val howtosortLeft= ( A: HairPixelDelta, B: HairPixelDelta )=> {
+              if(A.delta == B.delta && A.hp.prHair == B.hp.prHair) A.hp.x < B.hp.x //lowest x better
+              else if( A.delta == B.delta ) A.hp.prHair > B.hp.prHair  //higher pr better
+              else A.delta > B.delta //higher delta better
+            }
+            
+            val ourhairpixels=consume( startPixel,allthepixels, deltaRange, List(startPixel), howtosortRight)            
             val img_oneHaire=createBlankImage( "oneHairGrouping", imgDst)
             val pixeltoremove=removeHairPixels( ourhairpixels,allthepixels)
             
@@ -231,12 +264,12 @@ class testRegroupFuzzyHairPixel extends WordSpec {
         cleanResultDirectory()
         implicit val searchtoutside =new fuzzySearchOutsidersPixelUsingMultiplePolyRegression(50,1)
         implicit val dd =new searchWhiteToBlackLine();
-        implicit val dst=destinationFiles( "poly_(50,1)_searchWiteToBlack/")
+        implicit val dst=destinationFiles( "poly_(50,1)_searchWiteToBlack_consumeLeft/")
         
         //
         // save file or read file to get the map
         //
-        val mapDeltaHairPixels= if( true){
+        val mapDeltaHairPixels= if( false){
            val ourmap= hairsCount(img,deltaRange)
            val oos = new ObjectOutputStream(new FileOutputStream("saveMapHairs"))
            oos.writeObject(ourmap)
