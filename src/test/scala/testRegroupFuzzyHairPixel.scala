@@ -107,8 +107,9 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       // once we detected a hair, with have to remove all the pixels around
       // for the moment, only the ones from the left to the right, not delta up / down...
       // to fix it.
+      // threshold: default 0.4 , threshold for prHair (probabilty to be a hair)
       @tailrec
-      def removeHairPixels( pixelstocheck: List[HairPixelDelta], allpixelhairs: DeltaHairs, pixeltoremove: List[HairPixelDelta] =List.empty):List[HairPixelDelta] ={
+      def removeHairPixels( pixelstocheck: List[HairPixelDelta], allpixelhairs: DeltaHairs, pixeltoremove: List[HairPixelDelta] =List.empty, threshold : Double =0.4):List[HairPixelDelta] ={
         
         if( pixelstocheck.isEmpty ) {
           pixeltoremove
@@ -124,7 +125,7 @@ class testRegroupFuzzyHairPixel extends WordSpec {
           val nextToVisit=(for( currentdelta <- listDelta )yield{
             (allpixelhairs.get(currentdelta).toList.flatten.filter{p=> neighbours contains p.x}.map{
               p => new HairPixelDelta(p, currentdelta)
-            }).filter (_.hp.prHair > 0.4).filterNot( pixeltoremove contains _).filterNot( pixelstocheck contains _)
+            }).filter (_.hp.prHair > threshold).filterNot( pixeltoremove contains _).filterNot( pixelstocheck contains _)
           }).flatten
           
           //visit if not present in pixelstocheck and pixeltoremove and prHair > 0.5
@@ -139,7 +140,7 @@ class testRegroupFuzzyHairPixel extends WordSpec {
 
       
       //----------------------------------------------
-      // Consume only >0.1 pr for the moment
+      // Consume only >0.5 pr for the moment
       //
       // update: 5/05/2016 
       //         for zoneFilter( ourmap, Pixel(37,568), Pixel(100,650))  
@@ -150,7 +151,7 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       def consume(currentpixel: HairPixelDelta, hairs: DeltaHairs, deltas: Range, currentPixel: List[HairPixelDelta], howtosort: ( HairPixelDelta, HairPixelDelta )=> Boolean
         = (A,B) => A.hp.prHair>B.hp.prHair    
       ): List[HairPixelDelta]={
-        val next=getNextPixels( currentpixel, hairs, deltas).filterNot( currentPixel contains _).filter(_.hp.prHair>0.1d).sortWith(howtosort).headOption
+        val next=getNextPixels( currentpixel, hairs, deltas).filterNot( currentPixel contains _).filter(_.hp.prHair>0.5d).sortWith(howtosort).headOption
         
         
         val result= currentPixel ++ next
@@ -198,7 +199,11 @@ for (var i = 0; i < arrayLength; i++) {
               else A.delta > B.delta //higher delta better
             }
             
-            val ourhairpixels=consume( startPixel,allthepixels, deltaRange, List(startPixel), howtosortRight)            
+            val ourhairpixels=
+              consume( startPixel,allthepixels, deltaRange, List(startPixel), howtosortRight)  ++
+              consume( startPixel,allthepixels, deltaRange, List(startPixel), howtosortLeft)
+            
+            
             val img_oneHaire=createBlankImage( "oneHairGrouping", imgDst)
             val pixeltoremove=removeHairPixels( ourhairpixels,allthepixels)
             
@@ -264,7 +269,7 @@ for (var i = 0; i < arrayLength; i++) {
         cleanResultDirectory()
         implicit val searchtoutside =new fuzzySearchOutsidersPixelUsingMultiplePolyRegression(50,1)
         implicit val dd =new searchWhiteToBlackLine();
-        implicit val dst=destinationFiles( "poly_(50,1)_searchWiteToBlack_consumeLeft/")
+        implicit val dst=destinationFiles( "poly_(50,1)_searchWiteToBlack_consumeLeft_limitedZone/")
         
         //
         // save file or read file to get the map
@@ -278,7 +283,8 @@ for (var i = 0; i < arrayLength; i++) {
         }else{
           val ois = new ObjectInputStream(new FileInputStream("saveMapHairs" ))
           val ourmap=ois.readObject().asInstanceOf[DeltaHairs]
-          zoneFilter( ourmap, Pixel(37,568), Pixel(100,650))
+         // zoneFilter( ourmap, Pixel(37,568), Pixel(100,650))
+          ourmap
         }
         
         
