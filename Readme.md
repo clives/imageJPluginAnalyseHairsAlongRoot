@@ -1,4 +1,4 @@
-### ImageJ plugin to evaluate root hair expansion(nbr and size)
+### ImageJ plugin to evaluate root hair expansion(number and size)
 
 Presently the biologists count manually hair by hair, image by image the hairs along the root of a XXXX to evaluate their length and number. This plugin should replace those steps by a single batch operation and generate a simple csv report with all the data that they need.
 
@@ -8,16 +8,19 @@ The first step is to determine the form of the hair using a median filter then g
 The main idea is to use this line to read the pixel under the line ( function(x) + delta).
 Delta is the parameter to move the line from the root. the hair pixel have to be perpendicular to the root, so moving the root line we should see short variation of color (going to a darker color) that should be part of our hair. The result is show at "color along the line". We use a simple algorithm ( linear regression by steps, recursivly removing the outliers pixels, before to assign a value from 0 to 1 to the pixel ), at this step all the pixels can be part of a hair, we just assign a probability to be part of the hair ( 0.0=not an hair to 1.0=a hair). Once we repeat the operation for all the possible delta we can process those pixel to regroup the hairs, filter them, and detect special pattern like floating hair ,...
 
+**Original image with the line f(x)+B:**
 
 ![](doc_images/result_delta025.jpg "ttt")          
 
 
-color along the line:     
+**color along the line:**     
 
 
 ![](doc_images/img_x_color_delta025.jpg "ttt")
 
-Image of p(Hair), the color of the pixel = p(Hair)*255   
+**Image of p(Hair), the color of the pixel = p(Hair)*255:**
+
+
 ![](doc_images/fuzzyHairs_001.png "ttt")
 
 
