@@ -17,6 +17,10 @@ color along the line:
 
 ![](doc_images/img_x_color_delta025.jpg "ttt")
 
+Image of p(Hair), the color of the pixel = p(Hair)*255   
+![](doc_images/fuzzyHairs_001.png "ttt")
+
+
 
 ----------------------------
 
