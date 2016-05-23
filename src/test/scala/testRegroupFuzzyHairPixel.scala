@@ -22,15 +22,10 @@ class testRegroupFuzzyHairPixel extends WordSpec {
       
       case class HairPixelDelta(  hp: HairPixel, delta: Int){
         override def toString()=s"hairpixel: $hp, delta: $delta"
-        
-        
       }
-      
-      
-      
+
       type DeltaHairs = Map[Int, List[HairPixel]];
-      
-      
+            
       case class destinationFiles(directoryName: String){       
         
         val resultImage= DIRECTORY_RESULTIMAGE + directoryName
