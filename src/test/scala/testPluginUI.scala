@@ -69,9 +69,30 @@ object testPluginUI {
   class CustomWindow( impe:ImagePlus,  ice:ImageCanvas, listeningMouseClicked:ListeningMouseClicked) extends ImageWindow(impe, ice) with ActionListener with MouseListener {
     
         val (button1,button2, textarea, labelNbrHaires) = addPanel()
+        
+        var listHairs= scala.List.empty[PossiblePixelsHair]
        
+        override def mouseClicked(e: MouseEvent)={
+          println("click");
+          
+          def closeEnough(p:HairPixelDelta, x:Int, y:Int )={
+            p.hp.x > x-1 && p.hp.x < x+1 && p.hp.y.get > y-1 && p.hp.y.get < y+1  
+            
+          }
+          
+          listHairs.filter{ ourhair =>  
+              ourhair.pixels.exists { p => closeEnough(p,e.getX,e.getY) }
+          }.headOption.map{
+            p =>
+              println("We have our hair"+p.hairId)
+          }
+          
+        }
+        
         val ourSink= Sink.foreach[PossiblePixelsHair]{
           elem => 
+            listHairs :+= elem
+            println("size nbr hairs:"+listHairs.size)
             val proc = impe.getProcessor
             proc.setColor( java.awt.Color.RED)
             elem.pixels.map{
@@ -163,7 +184,7 @@ object testPluginUI {
          
         val ourwindow=new CustomWindow(img, img.getCanvas, new ListeningMouseClicked);
         img.getCanvas.requestFocus();
-        img.getCanvas.addMouseListener(new ListeningMouseClicked)
+        img.getCanvas.addMouseListener(ourwindow)
         
         
         
