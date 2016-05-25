@@ -96,10 +96,12 @@ object hairRegrouping {
       // for the moment, only the ones from the left to the right, not delta up / down...
       // to fix it.
       // threshold: default 0.4 , threshold for prHair (probabilty to be a hair)
+      // pixelLiberty : 1 => we move to the closest pixels => distance beetwen current
+      //                     pixel and the next
       //-----------------------------------------------------------------------
       @tailrec
       def removePossibleHairPixels( pixelstocheck: List[HairPixelDelta], allpixelhairs: DeltaHairs, 
-              pixeltoremove: List[HairPixelDelta] =List.empty, threshold : Double =0.4):List[HairPixelDelta] ={
+              pixeltoremove: List[HairPixelDelta] =List.empty, threshold : Double =0.4, pixelLiberty: Int=1):List[HairPixelDelta] ={
         
         if( pixelstocheck.isEmpty ) {
           pixeltoremove
@@ -109,8 +111,7 @@ object hairRegrouping {
           
           
          // val allpixeldelta=(allpixelhairs.get(currentpixel.delta) ++ allpixelhairs.get(currentpixel.delta+1) ++ allpixelhairs.get(currentpixel.delta-1)).flatten
-          
-          val listDelta = (-2 to 2).map( _ + currentpixel.delta)
+          val listDelta = (-pixelLiberty to pixelLiberty).map( _ + currentpixel.delta)
           
           val nextToVisit=(for( currentdelta <- listDelta )yield{
             (allpixelhairs.get(currentdelta).toList.flatten.filter(_.prHair > threshold).filter{p=> neighbours contains p.x}.map{
@@ -123,7 +124,7 @@ object hairRegrouping {
          //   p => new HairPixelDelta(p, currentpixel.delta)
          // }).filter (_.hp.prHair > 0.1).filterNot( pixeltoremove contains _).filterNot( pixelstocheck contains _)
           
-          removePossibleHairPixels( pixelstocheck.tail ++ nextToVisit, allpixelhairs, currentpixel::pixeltoremove)
+          removePossibleHairPixels( pixelstocheck.tail ++ nextToVisit,allpixelhairs, currentpixel::pixeltoremove,  threshold=threshold)
         }
       }
       
@@ -168,7 +169,7 @@ object hairRegrouping {
       def consumeHairs(allthepixels: DeltaHairs, deltaRange: Range, imgDst: ImagePlus, 
           optActor: Option[ActorRef]=None, currentId: Int=0, debug: Boolean=false, thresholdHair:Double= 0.4d)
           (implicit dst:destinationFiles):List[PossiblePixelsHair]={
-        if( currentId > 160){
+        if( currentId > 260){
           IJ.save( imgDst , dst.resultImage + s"full_Hairs.tif")
           List.empty[PossiblePixelsHair]
         }
@@ -196,13 +197,13 @@ object hairRegrouping {
               
               
               
-              val pixeltoremove=removePossibleHairPixels( ourhairpixels,allthepixels, threshold=thresholdHair)              
+              val pixeltoremove=removePossibleHairPixels( ourhairpixels,allthepixels, threshold=0.6d)              
               val proc_fullimg = imgDst.getProcessor                           
               proc_fullimg.setColor(255)              
               val deltas=pixeltoremove.map(_.delta).distinct
               
               
-              if( debug){ //generate files for debugging purpose (one for each hair)
+              if( debug || currentId==112){ //generate files for debugging purpose (one for each hair)
                 val img_oneHaire=createBlankImage( "oneHairGrouping", imgDst)
                 val proc= img_oneHaire.getProcessor
                 proc.setColor(255)
@@ -212,7 +213,7 @@ object hairRegrouping {
                 pixeltoremove.map{
                    pixels =>
                      proc.drawPixel(pixels.hp.x, pixels.hp.y.get)
-                     //proc_fullimg.drawPixel(pixels.hp.x, pixels.hp.y.get)
+                     proc_fullimg.drawPixel(pixels.hp.x, pixels.hp.y.get) //show whole pixels consumed
                      
                 }
                 
@@ -222,10 +223,11 @@ object hairRegrouping {
                 proc.setColor(WHITE)
                 proc.fill()
                 proc.setColor(RED)
+                proc_fullimg.setColor(RED)
                 ourhairpixels.map{
                    pixels =>
                      proc.drawPixel(pixels.hp.x, pixels.hp.y.get)    
-                     proc_fullimg.drawPixel(pixels.hp.x, pixels.hp.y.get)
+                     proc_fullimg.drawPixel(pixels.hp.x, pixels.hp.y.get) //show pixel consumed only for hair pixel
                      
                 }
               
