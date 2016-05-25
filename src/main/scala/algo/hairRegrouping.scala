@@ -165,7 +165,8 @@ object hairRegrouping {
        * dst: where to save the debug files
        * @return 
        */
-      def consumeHairs(allthepixels: DeltaHairs, deltaRange: Range, imgDst: ImagePlus, optActor: Option[ActorRef]=None, currentId: Int=0, debug: Boolean=false)
+      def consumeHairs(allthepixels: DeltaHairs, deltaRange: Range, imgDst: ImagePlus, 
+          optActor: Option[ActorRef]=None, currentId: Int=0, debug: Boolean=false, thresholdHair:Double= 0.4d)
           (implicit dst:destinationFiles):List[PossiblePixelsHair]={
         if( currentId > 160){
           IJ.save( imgDst , dst.resultImage + s"full_Hairs.tif")
@@ -195,7 +196,7 @@ object hairRegrouping {
               
               
               
-              val pixeltoremove=removePossibleHairPixels( ourhairpixels,allthepixels)              
+              val pixeltoremove=removePossibleHairPixels( ourhairpixels,allthepixels, threshold=thresholdHair)              
               val proc_fullimg = imgDst.getProcessor                           
               proc_fullimg.setColor(255)              
               val deltas=pixeltoremove.map(_.delta).distinct
