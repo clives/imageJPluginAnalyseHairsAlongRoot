@@ -32,6 +32,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import javax.swing.SwingUtilities
 import hairRegrouping._
 import java.awt._
+import java.io.FileInputStream
+import java.io.ObjectInputStream
         
 /*
  * experiment with imagej plugin to add ui to manipulate hairs
@@ -41,6 +43,10 @@ object testPluginUI {
 	  implicit val system = ActorSystem("TestSystem")
 	  implicit val materializer = ActorMaterializer()
 		import java.awt.event.MouseEvent
+		
+		trait ItemListener extends java.awt.event.ItemListener{
+		  def itemStateChanged(e:ItemEvent){}
+	  }
 		
 	  trait MouseListener  extends java.awt.event.MouseListener{
   		def mouseClicked(e:MouseEvent){}
@@ -66,17 +72,43 @@ object testPluginUI {
       
     }
   
-  class CustomWindow( impe:ImagePlus,  ice:ImageCanvas, listeningMouseClicked:ListeningMouseClicked) extends ImageWindow(impe, ice) with ActionListener with MouseListener {
+  class CustomWindow( impe:ImagePlus,  ice:ImageCanvas, listeningMouseClicked:ListeningMouseClicked) extends ImageWindow(impe, ice) with ActionListener with MouseListener with ItemListener {
     
-        val (button1,button2, textarea, labelNbrHaires) = addPanel()
+        val (button1,button2, textarea, labelNbrHaires, filterHair) = addPanel()
+        val HAIR_COLOR = java.awt.Color.RED;
+        val HAIR_COLOR_FILTERED = java.awt.Color.BLUE;
+        
         
         var listHairs= scala.List.empty[PossiblePixelsHair]
        
+        override def itemStateChanged(e:ItemEvent)={
+          if( e.getItemSelectable == filterHair){
+
+            
+             if (e.getStateChange() == ItemEvent.DESELECTED){
+               println("DESELECTED");
+             }else{
+               println("SELECTED");
+               val proc = impe.getProcessor
+               proc.setColor( HAIR_COLOR_FILTERED)
+               listHairs.filter { x => x.pixels.size <= 40 }.foreach { 
+                 elem =>  elem.pixels.foreach{
+                     pixels =>
+                       proc.drawPixel(pixels.hp.x, pixels.hp.y.get)                                          
+                  }
+               
+               }
+               impe.updateAndDraw()            
+             }
+          }else{          
+          }
+        }
+        
         override def mouseClicked(e: MouseEvent)={
-          println("click");
+          println("click - CustomWindow");
           
           def closeEnough(p:HairPixelDelta, x:Int, y:Int )={
-            p.hp.x > x-1 && p.hp.x < x+1 && p.hp.y.get > y-1 && p.hp.y.get < y+1  
+            p.hp.x > x-4 && p.hp.x < x+4 && p.hp.y.get > y-4 && p.hp.y.get < y+4  
             
           }
           
@@ -84,7 +116,12 @@ object testPluginUI {
               ourhair.pixels.exists { p => closeEnough(p,e.getX,e.getY) }
           }.headOption.map{
             p =>
-              println("We have our hair"+p.hairId)
+              val deltaSize= p.pixels.map(_.delta).distinct.size
+              val nbrPixels = p.pixels.size
+              
+              SwingUtilities.invokeLater( () => {textarea.setText(s"id: ${p.hairId}, deltaSize:$deltaSize , nbrPixels: $nbrPixels")})
+          }.getOrElse{
+            SwingUtilities.invokeLater( () => {textarea.setText(s"Not a hair")})
           }
           
         }
@@ -94,7 +131,7 @@ object testPluginUI {
             listHairs :+= elem
             println("size nbr hairs:"+listHairs.size)
             val proc = impe.getProcessor
-            proc.setColor( java.awt.Color.RED)
+            proc.setColor( HAIR_COLOR)
             elem.pixels.map{
                  pixels =>
                    proc.drawPixel(pixels.hp.x, pixels.hp.y.get)                                          
@@ -110,7 +147,7 @@ object testPluginUI {
         
         def addPanel()={
             val panel = new Panel();
-            panel.setLayout(new GridLayout(1, 3));
+            panel.setLayout(new GridLayout(1, 4));
             val button1 = new Button(" Invert ");
             button1.addActionListener(this);
             panel.add(button1);
@@ -122,10 +159,18 @@ object testPluginUI {
             val nbrHairs = new Label(" ");
           //  nbrHairs.setMinimumSize( new Dimension(100,100))
             panel.add(nbrHairs)
+            
+            val filterHair =new Checkbox();
+            filterHair.setState(false)
+            filterHair.setEnabled(false)
+            filterHair.setLabel("Filter hairs:")
+            filterHair.addItemListener( this)
+            panel.add(filterHair)
+            
             add(panel);
             add( textarea)
             pack();
-            (button1, button2, textarea, nbrHairs)
+            (button1, button2, textarea, nbrHairs,filterHair)
         }
         
         setText("test")
@@ -152,15 +197,25 @@ object testPluginUI {
 
         import hairRegrouping._
         
+        //Thread.sleep(30000)
+        
         cleanResultDirectory()
         implicit val searchtoutside =new fuzzySearchOutsidersPixelUsingMultiplePolyRegression(50,1)
         implicit val dd =new searchWhiteToBlackLine();
         implicit val dst=destinationFiles( "pluginExperiment/")
         
         //
-        // save file or read file to get the map
+        // create analyse or read file with last result
         //
-        val mapDeltaHairPixels= hairsCount(img,deltaRange)
+        val mapDeltaHairPixels= 
+          if( false){
+          hairsCount(img,deltaRange)
+          }else{
+             val ois = new ObjectInputStream(new FileInputStream("saveMapHairs" ))
+             val ourmap=ois.readObject().asInstanceOf[DeltaHairs]
+             // zoneFilter( ourmap, Pixel(37,568), Pixel(100,650))
+             ourmap
+          }
         
          
 
@@ -175,7 +230,13 @@ object testPluginUI {
           .actorRef[hairRegrouping.PossiblePixelsHair](bufferSize = 0, OverflowStrategy.fail)
           .mapMaterializedValue{
             ref => 
-              consumeHairs(mapDeltaHairPixels, deltaRange, img.copyToNewImg("workingcopy"),Some(ref))
+              
+              //remove pixel with p(hair) below threshold = 0.04d
+              val mapfiltered=mapDeltaHairPixels.map{
+                delta_listpixels => (delta_listpixels._1, delta_listpixels._2.filter(_.prHair>=0.04d))
+              }             
+                    
+              consumeHairs(mapfiltered, deltaRange, img.copyToNewImg("workingcopy"),Some(ref), thresholdHair=0.04d)
          }
           
         val ip = img.getProcessor();
@@ -188,8 +249,9 @@ object testPluginUI {
         
         
         
-         val flow=s to ourwindow.ourSink
+        val flow=s to ourwindow.ourSink
         flow.run()
+        ourwindow.filterHair.setEnabled(true)
 
   }
 }
