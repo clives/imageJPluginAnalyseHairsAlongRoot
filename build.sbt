@@ -8,6 +8,8 @@ libraryDependencies += "net.imagej" % "ij" % "1.49k"
 libraryDependencies += "org.apache.commons" % "commons-math3" % "3.6"
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.6" % "test"
 libraryDependencies += "com.typesafe.akka" %% "akka-stream-experimental" % "2.0.1"
+libraryDependencies += "com.itextpdf" % "itextpdf" % "5.5.9"
+
 
 fork := true
 
