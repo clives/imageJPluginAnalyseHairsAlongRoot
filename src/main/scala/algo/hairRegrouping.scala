@@ -54,9 +54,9 @@ object hairRegrouping {
       // get Neighbour ( raising delta for the moment)
       // update 05/05/2016 : consume all the nextpixels, delta {  0 , 1}+currentDelta
       //----------------------------------------------
-      def getNextPixels( currentpixel: HairPixelDelta,hairs: DeltaHairs, deltas: Range )={
+      def getNextPixels( currentpixel: HairPixelDelta,hairs: DeltaHairs, deltas: Range, goingdown:Boolean=true )={
         val listx=List( currentpixel.hp.x, currentpixel.hp.x+1, currentpixel.hp.x-1)
-        val nextdeltas=(0 to 1).map( _ + currentpixel.delta )
+        val nextdeltas=if( goingdown) (0 to 1).map( _ + currentpixel.delta ) else (-1 to 0).map( _ + currentpixel.delta )
         
         val result=for( nextdelta <- nextdeltas )yield{
           if( deltas.contains(nextdelta)){
@@ -204,34 +204,21 @@ object hairRegrouping {
               val deltas=pixeltoremove.map(_.delta).distinct
               
               
-              //
-              //   DEBUG
-              //
-              if( debug ||  currentId==6){ //generate files for debugging purpose (one for each hair)
-                val img_oneHaire=createBlankImage( "oneHairGrouping", imgDst)
-                val proc= img_oneHaire.getProcessor
-                proc.setColor(255)
-                
-                
-                
-                
-                // F(detla)=Max(x)-Min(x)
-                val fdelta=pixeltoremove.groupBy(_.delta).map{
-                  delta_pixel => 
-                    (delta_pixel._1,
-                    delta_pixel._2.map(_.hp.x).max-
-                    delta_pixel._2.map(_.hp.x).min)
-                }
-                
-                val mapDeltaX=pixeltoremove.groupBy(_.delta)
-                
-                
-                //pixels orderd by X
+              
+              /*
+               * evaluate how many hairs we could have on this data.
+               * ( if two hairs touch we detect only one , we have to analyse the
+               * data to check if we have more than one hair in this set of pixels.
+               */
+              
+               val mapDeltaX=pixeltoremove.groupBy(_.delta)
+              
+              //pixels orderd by X
                 def evalNbrDifferentHair( pixels: List[HairPixelDelta]):Int={
                   pixels match{
                     case l::Nil => 1
                     case l::ls =>
-                      if(  ls.head.hp.x  - l.hp.x  > 1 ) 1+evalNbrDifferentHair(ls)
+                      if(  ls.head.hp.x  - l.hp.x  > 10 ) 1+evalNbrDifferentHair(ls)
                       else evalNbrDifferentHair(ls)
                     case _ => 1 
                   }
@@ -245,6 +232,40 @@ object hairRegrouping {
                 }
                 
                 val maxNbrHair=nbrHairPerDelta.map(_._2).max
+                
+                if( maxNbrHair > 1  )
+                println(s"maxNbrHair:$maxNbrHair , currentId:$currentId")
+                
+              /*
+               *   
+               */
+                
+              
+              
+              //
+              //   DEBUG
+              //
+              if( debug ||  currentId==6  || maxNbrHair > 1 ){ //generate files for debugging purpose (one for each hair)
+                val img_oneHaire=createBlankImage( "oneHairGrouping", imgDst)
+                val proc= img_oneHaire.getProcessor
+                proc.setColor(255)
+                
+                println(s"XXCXX currentId : $currentId  maxNbrHair: $maxNbrHair")
+                
+                
+                
+                // F(detla)=Max(x)-Min(x)
+                val fdelta=pixeltoremove.groupBy(_.delta).map{
+                  delta_pixel => 
+                    (delta_pixel._1,
+                    delta_pixel._2.map(_.hp.x).max-
+                    delta_pixel._2.map(_.hp.x).min)
+                }
+                
+               
+                
+                
+                
                 val deltaMaxNbrHair = nbrHairPerDelta.filter(_._2==maxNbrHair).map(_._1).toList.sortBy{x=>x}.head //smallest delta with higher nbr hairs
                 
                 //
@@ -252,10 +273,25 @@ object hairRegrouping {
                 // maxNbrHair different point. let's try to consume each point with each directions (left/right)
                 // and pick the largest one
                 //
-                def consumefullHair(startIntPoint: HairPixelDelta, fullHair: DeltaHairs, deltas: Range, currentPixel: List[HairPixelDelta], howtosort: ( HairPixelDelta, HairPixelDelta )=> Boolean
+                
+                def getHairNextPixels( currentpixel: HairPixelDelta,hairs: DeltaHairs, deltas: Range, goingdown:Boolean=true )={
+                  val listx=List( currentpixel.hp.x, currentpixel.hp.x+1, currentpixel.hp.x-1,currentpixel.hp.x+2, currentpixel.hp.x-2)
+                  val nextdeltas=if( goingdown) (0 to 1).map( _ + currentpixel.delta ) else (-1 to 0).map( _ + currentpixel.delta )
+                  
+                  val result=for( nextdelta <- nextdeltas )yield{
+                    if( deltas.contains(nextdelta)){
+                      val lPossiblepixels=hairs.get( nextdelta).toList.flatten.filter{ p => listx.contains( p.x)}               
+                      lPossiblepixels.map{ p=> HairPixelDelta(p, nextdelta)}
+                    }else{
+                      List.empty
+                    }
+                  }
+                  result.flatten.toList.filterNot( _ == currentpixel)
+                }
+                def consumefullHair(goingdown: Boolean,startIntPoint: HairPixelDelta, fullHair: DeltaHairs, deltas: Range, currentPixel: List[HairPixelDelta], howtosort: ( HairPixelDelta, HairPixelDelta )=> Boolean
                   = (A,B) => A.hp.prHair>B.hp.prHair    
                 ): List[HairPixelDelta]={
-                  val next=getNextPixels( startIntPoint, fullHair, deltas).filterNot( currentPixel contains _).sortWith(howtosort).headOption
+                  val next=getHairNextPixels( startIntPoint, fullHair, deltas,goingdown).filterNot( currentPixel contains _).sortWith(howtosort).headOption
                   
                   println(s"start point:$startIntPoint, next:$next");
                   
@@ -264,13 +300,53 @@ object hairRegrouping {
                   next match{
                     case None => result
                     case Some(nextcurrentpixel)=>
-                      consumefullHair(  nextcurrentpixel, fullHair, deltas, result, howtosort)
+                      consumefullHair(  goingdown, nextcurrentpixel, fullHair, deltas, result, howtosort)
                   }     
                 }
+                
+                def searchStartingPoints( pixels: List[HairPixelDelta]):List[HairPixelDelta]={
+                  pixels match{
+                    case l::Nil => Nil
+                    case l::ls =>
+                      if(  ls.head.hp.x  - l.hp.x  > 10 ) ls.head :: searchStartingPoints(ls)
+                      else searchStartingPoints(ls)
+                    case _ => Nil 
+                  }
+                }
+                
                 val startingpoint= mapDeltaX.get( deltaMaxNbrHair).head.head
+                val startingPoints= searchStartingPoints(mapDeltaX.get( deltaMaxNbrHair).get)
+                
+                startingPoints.foreach { startingpoint =>                                                                                                                        
+                    val hair1=consumefullHair( true, startingpoint, mapDeltaX.map{x=>(x._1, x._2.map(_.hp))}, deltaRange,List.empty[HairPixelDelta],howtosortRight) ++
+                      consumefullHair( false, startingpoint, mapDeltaX.map{x=>(x._1, x._2.map(_.hp))}, deltaRange,List.empty[HairPixelDelta],howtosortLeft)
+                  
+                    val hair2=consumefullHair( true, startingpoint, mapDeltaX.map{x=>(x._1, x._2.map(_.hp))}, deltaRange,List.empty[HairPixelDelta],howtosortLeft) ++
+                      consumefullHair( false, startingpoint, mapDeltaX.map{x=>(x._1, x._2.map(_.hp))}, deltaRange,List.empty[HairPixelDelta],howtosortRight) 
+                      
+                      
+                   val img_oneHairConsuming=createBlankImage( "oneHairConsuming", imgDst)
+                    val proc_img_oneHairConsuming=img_oneHairConsuming.getProcessor
+                    proc_img_oneHairConsuming.setColor(RED)
+                    hair1.foreach{
+                       pixels =>
+                         proc_img_oneHairConsuming.drawPixel(pixels.hp.x, pixels.hp.y.get)                     
+                    }
+                    proc_img_oneHairConsuming.setColor(BLUE)
+                    hair2.foreach{
+                       pixels =>
+                         proc_img_oneHairConsuming.drawPixel(pixels.hp.x, pixels.hp.y.get)                     
+                    }
+                    IJ.save( img_oneHairConsuming , dst.fullPixelHairs+ s"${currentId}_img_oneHairConsuming_start:${startingpoint.hp.x}.tif")   
+                }
+                
+                
                 println(s"startingpoint: ${startingpoint}")
-                val hair1=consumefullHair(  startingpoint, mapDeltaX.map{x=>(x._1, x._2.map(_.hp))}, deltaRange,List.empty[HairPixelDelta],howtosortRight)
-                val hair2=consumefullHair(  startingpoint, mapDeltaX.map{x=>(x._1, x._2.map(_.hp))}, deltaRange,List.empty[HairPixelDelta],howtosortLeft)
+                val hair1=consumefullHair( true, startingpoint, mapDeltaX.map{x=>(x._1, x._2.map(_.hp))}, deltaRange,List.empty[HairPixelDelta],howtosortRight) ++
+                  consumefullHair( false, startingpoint, mapDeltaX.map{x=>(x._1, x._2.map(_.hp))}, deltaRange,List.empty[HairPixelDelta],howtosortLeft)
+                  
+                val hair2=consumefullHair( true, startingpoint, mapDeltaX.map{x=>(x._1, x._2.map(_.hp))}, deltaRange,List.empty[HairPixelDelta],howtosortLeft) ++
+                  consumefullHair( false, startingpoint, mapDeltaX.map{x=>(x._1, x._2.map(_.hp))}, deltaRange,List.empty[HairPixelDelta],howtosortRight) 
                 
                 println(s"haire size: ${hair1} , ${hair2}")
                 
@@ -301,7 +377,7 @@ object hairRegrouping {
                 val proc_delta_vs_nbrHair=img_delta_vs_nbrHair.getProcessor
                 nbrHairPerDelta.foreach{
                   case(delta,x) => proc_delta_vs_nbrHair.drawPixel( delta - minx, x*10)
-                  println(s"Draw at x:${delta-minx}, y:${x-miny}")
+                 //println(s"Draw at x:${delta-minx}, y:${x-miny}")
                 }
                 IJ.save( img_delta_vs_nbrHair , dst.fullPixelHairs+ s"${currentId}_delta_vs_nbrHair.tif")
                 
