@@ -9,6 +9,7 @@ libraryDependencies += "org.apache.commons" % "commons-math3" % "3.6"
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.6" % "test"
 libraryDependencies += "com.typesafe.akka" %% "akka-stream-experimental" % "2.0.1"
 libraryDependencies += "com.itextpdf" % "itextpdf" % "5.5.9"
+libraryDependencies += "net.sf.jasperreports" % "jasperreports" % "5.2.0"
 
 
 fork := true
