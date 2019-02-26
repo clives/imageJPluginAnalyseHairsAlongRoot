@@ -18,7 +18,7 @@ Delta is the parameter to move the line from the root. the hair pixel have to be
 
 ![](doc_images/img_x_color_delta025.jpg "ttt")
 
-**Image of p(Hair), the color of the pixel = p(Hair)*255:**
+**Image of p(Hair), the color of the pixel = p(Hair) multiply by 255:**
 
 
 ![](doc_images/fuzzyHairs_001.png "ttt")
@@ -31,7 +31,7 @@ Delta is the parameter to move the line from the root. the hair pixel have to be
 experiment using multi polynomial regression to detect outsiders pixels who
 can be part of a hair.
 
-#####Image source:     
+##### Image source:     
 
 ![](doc_images/src_image_01.jpg "ttt")
 
